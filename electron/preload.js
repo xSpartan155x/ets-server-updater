@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   openLogFile: () => ipcRenderer.invoke('open-log-file'),
   openConsoleFile: () => ipcRenderer.invoke('open-console-file'),
   publicIp: () => ipcRenderer.invoke('public-ip'),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
   setTheme: (theme) => ipcRenderer.invoke('set-theme', theme),
   onState: subscribe('state'),
   onLog: subscribe('log'),

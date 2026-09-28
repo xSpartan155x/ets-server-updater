@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, Loader2, Monitor, Moon, ScrollText, Settings as SettingsIcon, SquareTerminal, Sun } from 'lucide-react';
+import { BookOpen, LayoutDashboard, Loader2, Monitor, Moon, ScrollText, Settings as SettingsIcon, SquareTerminal, Sun } from 'lucide-react';
 import icon from '../resources/icon.png';
 import { StatusDot, STATE_STYLES } from './components/ui';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Logs from './pages/Logs';
 import Console from './pages/Console';
+import Guide from './pages/Guide';
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'console', label: 'Console', icon: SquareTerminal, mode: 'server' },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
   { id: 'logs', label: 'Logs', icon: ScrollText },
+  { id: 'guide', label: 'Guide', icon: BookOpen },
 ];
 
 const THEMES = [
@@ -141,6 +143,7 @@ export default function App() {
         {page === 'dashboard' && <Dashboard data={data} snapshot={snapshot} logs={logs} onNavigate={setPage} />}
         {page === 'settings' && <Settings data={data} onSaved={onSaved} />}
         {page === 'logs' && <Logs logs={logs} />}
+        {page === 'guide' && <Guide />}
         {page === 'console' && snapshot.mode === 'server' && <Console snapshot={snapshot} lines={consoleLines} />}
       </main>
     </div>

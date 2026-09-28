@@ -105,7 +105,12 @@ export default function Settings({ data, onSaved }) {
               checked={autostart}
               onChange={(v) => { setAutostart(v); setSaved(false); }}
               label="Start with Windows"
-              description="Starts minimized in the tray when you sign in."
+              description={
+                !data.canAutostart ? 'Available only in the installed app (not with npm run dev / start).'
+                  : data.autostartBlocked ? 'Disabled in Windows (Task Manager → Startup apps): enable it there too.'
+                    : 'Starts minimized in the tray when you sign in.'
+              }
+              disabled={!data.canAutostart}
             />
           </div>
         </Card>

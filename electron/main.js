@@ -9,6 +9,8 @@ const { ServerEngine } = require('./server-engine');
 
 const APP_NAME = 'ETS2 Package Sync';
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
+// On Windows the login item is matched by path AND arguments: always read and write it with the same args
+const LOGIN_ITEM = { args: ['--hidden'] };
 const ICON_DIR = app.isPackaged ? path.join(process.resourcesPath, 'icons') : path.join(__dirname, '..', 'resources');
 
 let tray = null;
@@ -182,7 +184,10 @@ function registerIpc() {
   ipcMain.handle('get-state', () => ({
     settings,
     configured: Boolean(settings.mode),
-    autostart: app.getLoginItemSettings().openAtLogin,
+    autostart: app.getLoginItemSettings(LOGIN_ITEM).openAtLogin,
+    autostartBlocked: app.isPackaged && app.getLoginItemSettings(LOGIN_ITEM).openAtLogin &&
+      !app.getLoginItemSettings(LOGIN_ITEM).executableWillLaunchAtLogin,
+    canAutostart: app.isPackaged,
     snapshot: snapshot(),
     version: app.getVersion(),
     localIps: localIps(),
@@ -206,7 +211,7 @@ function registerIpc() {
 
     settings = next;
     saveSettings(settings);
-    if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: Boolean(autostart), args: ['--hidden'] });
+    if (app.isPackaged) app.setLoginItemSettings({ ...LOGIN_ITEM, openAtLogin: Boolean(autostart) });
     stopEngine();
     await startEngine();
     return { ok: true, snapshot: snapshot() };
@@ -214,6 +219,9 @@ function registerIpc() {
 
   ipcMain.handle('run-action', (_event, id) => runAction(id));
   ipcMain.handle('public-ip', () => publicIp());
+  ipcMain.handle('open-external', (_event, url) => {
+    if (/^https:\/\//i.test(String(url))) shell.openExternal(String(url)); // links of the Guide page
+  });
   ipcMain.handle('open-log-file', () => log.file && shell.openPath(log.file));
   ipcMain.handle('open-console-file', () => engine && engine.consoleFile && shell.openPath(engine.consoleFile));
 
@@ -235,6 +243,10 @@ function registerIpc() {
 }
 
 // ------------------------------------------------------------------ lifecycle
+
+// npm run dev / start: own data folder, so it runs next to the installed app instead of
+// hitting its single-instance lock (which would just show the installed app's window)
+if (!app.isPackaged) app.setPath('userData', `${app.getPath('userData')} (dev)`);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

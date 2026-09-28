@@ -181,9 +181,9 @@ export function CopyField({ value }) {
   );
 }
 
-export function Toggle({ checked, onChange, label, description }) {
+export function Toggle({ checked, onChange, label, description, disabled }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-4">
+    <label className={`flex items-start justify-between gap-4 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
       <span>
         <span className="block text-sm font-medium text-slate-800 dark:text-slate-200">{label}</span>
         {description && <span className="block text-xs text-slate-500 dark:text-slate-400">{description}</span>}
@@ -192,6 +192,7 @@ export function Toggle({ checked, onChange, label, description }) {
         type="button"
         role="switch"
         aria-checked={checked}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
         className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? 'bg-orange-600 dark:bg-orange-500' : 'bg-slate-300 dark:bg-slate-700'}`}
       >

@@ -17,6 +17,8 @@ temporaneo -> push                                                    -> sostitu
 
 Nessun file di configurazione da modificare a mano: tutto si imposta dalla finestra dell'app.
 
+> 📘 Nell'app, la pagina **Guide** contiene la guida passo passo con immagini: repository, Client, Server, rete, webhook e token.
+
 ## Installazione
 
 Eseguire `ETS2PackageSync-Setup-<versione>.exe` (cartella `release/` dopo la build) su ogni PC, client e server. Il setup:
@@ -50,11 +52,13 @@ Il colore del pallino sull'icona indica lo stato: verde = ok, blu = operazione i
 
 In basso a sinistra nella finestra si sceglie il tema: **chiaro**, **sistema** (segue Windows) o **scuro**.
 
-La finestra ha tre pagine:
+La finestra ha queste pagine:
 
 - **Dashboard**: stato, dettagli e pulsanti delle azioni.
 - **Settings**: tutte le impostazioni.
 - **Logs**: log in tempo reale, con filtri e il pulsante *Open log file*.
+- **Console** (solo Server): log del server ETS2 in tempo reale e pulsanti Start / Stop / Restart.
+- **Guide**: guida passo passo alla configurazione, con immagini per il tema chiaro e scuro.
 
 ### Dove vengono salvati i dati
 
@@ -198,6 +202,8 @@ npm run dist     REM crea release\ETS2PackageSync-Setup-<versione>.exe
 
 Per una nuova versione basta cambiare `version` in `package.json`.
 
+`npm run dev` / `npm run start` usano una cartella dati separata (`%APPDATA%\ETS2 Package Sync (dev)`), con impostazioni proprie: possono girare insieme all'app installata. In modalità Server, se anche l'app installata è in modalità Server, usare una porta webhook diversa.
+
 > Se Electron parte come Node (`app` undefined), la variabile d'ambiente `ELECTRON_RUN_AS_NODE` è impostata (succede nei terminali avviati da alcuni tool). Rimuoverla prima di `npm run dev`.
 
 ### Struttura
@@ -211,7 +217,8 @@ electron/
   engine.js          base comune e utility
   client-engine.js   modalità Client (watch + git)
   server-engine.js   modalità Server (webhook + aggiornamento ETS2)
-src/                 UI React + Tailwind (Dashboard, Settings, Logs)
+src/                 UI React + Tailwind (Dashboard, Console, Settings, Logs, Guide)
+  assets/guide/      screenshot della guida: <nome>.png (tema chiaro) e <nome>-dark.png (tema scuro)
 resources/           icona dell'app (.ico/.png) e icone del tray
 index.html, vite.config.js, package.json (config electron-builder in "build")
 ```
