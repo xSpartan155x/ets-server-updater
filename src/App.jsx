@@ -7,7 +7,7 @@ import Settings from './pages/Settings';
 import Logs from './pages/Logs';
 import Console from './pages/Console';
 import Guide from './pages/Guide';
-import UpdateCard from './components/UpdateCard';
+import UpdateCard, { UpdateBanner } from './components/UpdateCard';
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -142,6 +142,7 @@ export default function App() {
       </aside>
 
       <main className="flex-1 overflow-y-auto">
+        <UpdateBanner />
         {page === 'dashboard' && <Dashboard data={data} snapshot={snapshot} logs={logs} onNavigate={setPage} />}
         {page === 'settings' && <Settings data={data} onSaved={onSaved} />}
         {page === 'logs' && <Logs logs={logs} />}

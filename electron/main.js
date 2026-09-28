@@ -124,9 +124,11 @@ function installUpdate() {
   return { ok: quitting };
 }
 
-function notify(body) {
+function notify(body, onClick) {
   if (Notification.isSupported()) {
-    new Notification({ title: APP_NAME, body: String(body).slice(0, 250), icon: path.join(ICON_DIR, 'icon.png') }).show();
+    const notification = new Notification({ title: APP_NAME, body: String(body).slice(0, 250), icon: path.join(ICON_DIR, 'icon.png') });
+    if (onClick) notification.on('click', onClick);
+    notification.show();
   }
 }
 
@@ -362,7 +364,7 @@ if (!app.requestSingleInstanceLock()) {
       updateTray();
       if (win && !win.isDestroyed()) win.webContents.send('update', state);
     });
-    updater.on('notify', notify);
+    updater.on('notify', (body) => notify(body, () => showWindow())); // click: open the app on the update banner
     registerIpc();
 
     tray = new Tray(trayImage('idle'));
