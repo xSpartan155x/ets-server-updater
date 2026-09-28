@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('api', {
   openConsoleFile: () => ipcRenderer.invoke('open-console-file'),
   publicIp: () => ipcRenderer.invoke('public-ip'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  exportSettings: (values) => ipcRenderer.invoke('export-settings', values),
+  importSettings: () => ipcRenderer.invoke('import-settings'),
   setTheme: (theme) => ipcRenderer.invoke('set-theme', theme),
   onState: subscribe('state'),
   onLog: subscribe('log'),

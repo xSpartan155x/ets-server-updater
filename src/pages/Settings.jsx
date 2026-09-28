@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  AlertCircle, CheckCircle2, ChevronRight, FolderGit2, Laptop, Save, Server, Sparkles, SlidersHorizontal, Terminal, Webhook,
+  AlertCircle, CheckCircle2, ChevronRight, FileDown, FileUp, FolderGit2, Info, Laptop, Save, Server, Sparkles, SlidersHorizontal, Terminal, Webhook, X,
 } from 'lucide-react';
 import {
   Button, Card, Field, NumberInput, PageHeader, PathInput, SecretInput, TextInput, Toggle, WebhookUrl,
@@ -44,6 +44,7 @@ export default function Settings({ data, onSaved }) {
   const [errors, setErrors] = useState([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [notice, setNotice] = useState(null); // { kind: 'info' | 'error', text }
 
   const dirty = useMemo(() => {
     const { theme: _a, ...current } = form;
@@ -54,6 +55,33 @@ export default function Settings({ data, onSaved }) {
   const set = (key) => (value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setSaved(false);
+  };
+
+  const fileName = (file) => file.split(/[\\/]/).pop();
+
+  const exportFile = async () => {
+    const result = await window.api.exportSettings(form);
+    if (result.canceled) return;
+    setNotice(result.ok
+      ? { kind: 'info', text: `Settings exported to ${fileName(result.file)}${result.includeSecrets ? ' with the secrets in clear text: keep the file private.' : ' (without secrets).'}` }
+      : { kind: 'error', text: result.error });
+  };
+
+  const importFile = async () => {
+    const result = await window.api.importSettings();
+    if (result.canceled) return;
+    if (!result.ok) {
+      setNotice({ kind: 'error', text: result.error });
+      return;
+    }
+    setForm((prev) => ({ ...prev, ...result.settings }));
+    setSaved(false);
+    setErrors([]);
+    const parts = [`Loaded ${fileName(result.file)}${result.version ? ` (exported by version ${result.version})` : ''}.`];
+    if (!result.includesSecrets) parts.push('The file has no secrets: the ones of this PC are kept.');
+    if (result.skipped.length) parts.push(`Ignored invalid values: ${result.skipped.join(', ')}.`);
+    parts.push('Check the paths for this PC, then click Save settings.');
+    setNotice({ kind: 'info', text: parts.join(' ') });
   };
 
   const save = async () => {
@@ -71,7 +99,22 @@ export default function Settings({ data, onSaved }) {
 
   return (
     <div className="flex min-h-full flex-col">
-      <PageHeader title="Settings" subtitle="Everything is stored on this PC. Secrets are encrypted for your Windows user." />
+      <PageHeader title="Settings" subtitle="Everything is stored on this PC. Secrets are encrypted for your Windows user.">
+        <Button icon={FileUp} onClick={importFile} title="Load settings from a file exported by another PC">Import</Button>
+        <Button icon={FileDown} onClick={exportFile} title="Save these settings to a file">Export</Button>
+      </PageHeader>
+      {notice && (
+        <div className="px-8 pb-4">
+          <div className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${notice.kind === 'error'
+            ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300'
+            : 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200'}`}
+          >
+            {notice.kind === 'error' ? <AlertCircle className="mt-0.5 size-4 shrink-0" /> : <Info className="mt-0.5 size-4 shrink-0" />}
+            <p className="selectable flex-1">{notice.text}</p>
+            <button type="button" onClick={() => setNotice(null)} className="opacity-60 hover:opacity-100" title="Close"><X className="size-4" /></button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 space-y-4 px-8 pb-6">
         <Card title="Mode of this PC" icon={SlidersHorizontal}>

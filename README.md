@@ -60,6 +60,14 @@ La finestra ha queste pagine:
 - **Console** (solo Server): log del server ETS2 in tempo reale e pulsanti Start / Stop / Restart.
 - **Guide**: guida passo passo alla configurazione, con immagini per il tema chiaro e scuro.
 
+### Copiare le impostazioni su un altro PC
+
+In **Settings** i pulsanti **Export** e **Import** salvano e caricano le impostazioni in un file `.json`:
+
+- all'export l'app chiede se includere webhook secret e token GitHub, che nel file sono **in chiaro** (nell'app invece sono cifrati);
+- l'import compila il modulo **senza salvare**: controllare i percorsi per il nuovo PC e poi *Save settings*. Vengono accettati solo campi conosciuti con valori validi; se il file non ha i secret, restano quelli del PC;
+- tema e *Start with Windows* non vengono copiati.
+
 ### Dove vengono salvati i dati
 
 In `%APPDATA%\ETS2 Package Sync\`:

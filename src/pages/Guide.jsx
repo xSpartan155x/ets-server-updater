@@ -110,6 +110,10 @@ server_packages.dat binary`}</code></pre>
           </ol>
           <p>Al primo avvio si apre la pagina <strong>Settings</strong> con la modalità ancora da scegliere:</p>
           <Shot name="primo-avvio" alt="Primo avvio: pagina Settings" />
+          <blockquote>
+          <p><strong>Hai già configurato l&#39;app su un altro PC?</strong> Lì apri <strong>Settings → Export</strong> e salva il file; qui apri <strong>Settings → Import</strong> e scegli quel file. Il modulo viene compilato ma non salvato: controlla i percorsi (cartelle ed eseguibile possono essere diversi su questo PC) e clicca <strong>Save settings</strong>.</p>
+          <p>All&#39;export l&#39;app chiede se includere webhook secret e token GitHub: nel file sono <strong>in chiaro</strong>, quindi includili solo per spostare la configurazione e non condividere il file. Senza secret, l&#39;import mantiene quelli già presenti su questo PC. Tema e <em>Start with Windows</em> non vengono copiati.</p>
+          </blockquote>
           <p>Chiudendo la finestra l&#39;app <strong>non</strong> si chiude: resta nell&#39;area di notifica (tray), vicino all&#39;orologio. Clic sull&#39;icona per riaprirla, tasto destro per il menu rapido. Il pallino sull&#39;icona indica lo stato: verde ok, blu operazione in corso, rosso errore, grigio non configurato.</p>
           <hr />
           <h2 id="4-configurare-il-client">4. Configurare il Client</h2>

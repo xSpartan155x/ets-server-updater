@@ -103,4 +103,54 @@ function validateSettings(s) {
   return errors;
 }
 
-module.exports = { DEFAULTS, loadSettings, saveSettings, validateSettings };
+// ------------------------------------------------------------------ export / import (file shared between PCs)
+
+const EXPORT_APP = 'ets2-package-sync';
+const EXPORT_FORMAT = 1;
+const NOT_EXPORTED = ['theme']; // personal preference of each PC
+
+/** Settings file content. Secrets are written in clear text only when asked. */
+function buildExport(values, includeSecrets, version) {
+  const settings = {};
+  for (const key of Object.keys(DEFAULTS)) {
+    if (NOT_EXPORTED.includes(key) || (!includeSecrets && SECRET_KEYS.includes(key))) continue;
+    settings[key] = values[key] ?? DEFAULTS[key];
+  }
+  return JSON.stringify({
+    app: EXPORT_APP,
+    format: EXPORT_FORMAT,
+    version,
+    exportedAt: new Date().toISOString(),
+    includesSecrets: Boolean(includeSecrets),
+    settings,
+  }, null, 2);
+}
+
+/** Parse an exported file: only known keys with a valid type are kept. Throws on a foreign file. */
+function parseImport(text) {
+  let data;
+  try {
+    data = JSON.parse(String(text).replace(/^\uFEFF/, ''));
+  } catch {
+    throw new Error('The file is not valid JSON.');
+  }
+  if (!data || data.app !== EXPORT_APP || typeof data.settings !== 'object' || !data.settings) {
+    throw new Error('This is not a settings file of ETS2 Package Sync.');
+  }
+  if (Number(data.format) > EXPORT_FORMAT) {
+    throw new Error(`The file was made by a newer version (${data.version || 'unknown'}): update the app first.`);
+  }
+  const settings = {};
+  const skipped = [];
+  for (const [key, value] of Object.entries(data.settings)) {
+    if (!(key in DEFAULTS) || NOT_EXPORTED.includes(key)) continue;
+    const valid = typeof DEFAULTS[key] === 'number'
+      ? Number.isInteger(value) && value >= 0
+      : typeof value === 'string' && value.length <= 4096 && (key !== 'mode' || ['', 'client', 'server'].includes(value));
+    if (valid) settings[key] = value;
+    else skipped.push(key);
+  }
+  return { settings, skipped, version: String(data.version || ''), includesSecrets: SECRET_KEYS.some((k) => k in settings) };
+}
+
+module.exports = { DEFAULTS, loadSettings, saveSettings, validateSettings, buildExport, parseImport };

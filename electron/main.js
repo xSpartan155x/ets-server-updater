@@ -1,9 +1,10 @@
 // ETS2 Package Sync - Electron main process: tray icon, dashboard window, client/server engine.
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { app, BrowserWindow, Menu, Notification, Tray, dialog, ipcMain, nativeImage, nativeTheme, shell } = require('electron');
 const log = require('./logger');
-const { DEFAULTS, loadSettings, saveSettings, validateSettings } = require('./settings');
+const { DEFAULTS, loadSettings, saveSettings, validateSettings, buildExport, parseImport } = require('./settings');
 const { ClientEngine } = require('./client-engine');
 const { ServerEngine } = require('./server-engine');
 const { Updater } = require('./updater');
@@ -261,6 +262,58 @@ function registerIpc() {
       ...(kind === 'dir' ? {} : { filters }),
     });
     return result.canceled ? null : result.filePaths[0];
+  });
+
+  ipcMain.handle('export-settings', async (_event, values) => {
+    const hasSecrets = Boolean(values.webhook_secret || values.github_token);
+    let includeSecrets = false;
+    if (hasSecrets) {
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'question',
+        title: 'Export settings',
+        message: 'Include the webhook secret and the GitHub token?',
+        detail: 'In the file they are stored in clear text: anyone with the file can read them. ' +
+          'Include them only to move the configuration to another PC, and keep the file private.',
+        buttons: ['Without secrets', 'Include secrets', 'Cancel'],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+      });
+      if (response === 2) return { ok: false, canceled: true };
+      includeSecrets = response === 1;
+    }
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Export settings',
+      defaultPath: path.join(app.getPath('documents'), `ets2-package-sync-${values.mode || 'settings'}.json`),
+      filters: [{ name: 'Settings', extensions: ['json'] }],
+    });
+    if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+    try {
+      fs.writeFileSync(result.filePath, buildExport(values, includeSecrets, app.getVersion()));
+    } catch (err) {
+      return { ok: false, error: `Cannot write the file: ${err.message}` };
+    }
+    log.info(`Settings exported to ${result.filePath}${includeSecrets ? ' (with secrets)' : ''}`);
+    return { ok: true, file: result.filePath, includeSecrets };
+  });
+
+  ipcMain.handle('import-settings', async () => {
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Import settings',
+      defaultPath: app.getPath('documents'),
+      properties: ['openFile'],
+      filters: [{ name: 'Settings', extensions: ['json'] }],
+    });
+    if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true };
+    const file = result.filePaths[0];
+    try {
+      if (fs.statSync(file).size > 1_000_000) throw new Error('The file is too big to be a settings file.');
+      const parsed = parseImport(fs.readFileSync(file, 'utf8'));
+      log.info(`Settings imported from ${file} (not saved yet)`);
+      return { ok: true, file, ...parsed };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   });
 
   log.on('line', (entry) => {
