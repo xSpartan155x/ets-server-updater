@@ -1,7 +1,7 @@
 {
   "name": "ets2-package-sync",
   "productName": "ETS2 Package Sync",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Sync ETS2 dedicated server packages through GitHub",
   "author": "ETS2 Package Sync",
   "license": "MIT",
