@@ -1,7 +1,7 @@
 {
   "name": "ets2-package-sync",
   "productName": "ETS2 Package Sync",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "Sync ETS2 dedicated server packages through GitHub",
   "author": "ETS2 Package Sync",
   "license": "MIT",
@@ -11,13 +11,14 @@
     "dev": "concurrently -k -n vite,electron \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build:renderer": "vite build",
     "start": "npm run build:renderer && electron .",
-    "dist": "npm run build:renderer && electron-builder --win nsis",
+    "dist": "npm run build:renderer && electron-builder --win --publish never",
+    "release": "npm run build:renderer && electron-builder --win --publish always",
     "postinstall": "node node_modules/electron/install.js"
   },
   "build": {
     "appId": "com.ets2.packagesync",
     "productName": "ETS2 Package Sync",
-    "artifactName": "ETS2PackageSync-Setup-${version}.${ext}",
+    "artifactName": "ETS2PackageSync-Portable-${version}.${ext}",
     "directories": {
       "output": "release",
       "buildResources": "resources"
@@ -38,11 +39,23 @@
         ]
       }
     ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "xSpartan155x",
+        "repo": "ets-server-updater",
+        "releaseType": "draft"
+      }
+    ],
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis",
+        "zip"
+      ],
       "icon": "resources/icon.ico"
     },
     "nsis": {
+      "artifactName": "ETS2PackageSync-Setup-${version}.${ext}",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
@@ -67,5 +80,8 @@
     "tailwindcss": "^4.3.3",
     "vite": "^8.3.1",
     "wait-on": "^9.1.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

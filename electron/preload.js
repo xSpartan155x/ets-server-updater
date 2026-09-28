@@ -20,5 +20,12 @@ contextBridge.exposeInMainWorld('api', {
   onState: subscribe('state'),
   onLog: subscribe('log'),
   onConsole: subscribe('console'),
+  onUpdate: subscribe('update'),
+  update: {
+    state: () => ipcRenderer.invoke('update-state'),
+    check: () => ipcRenderer.invoke('update-check'),
+    download: () => ipcRenderer.invoke('update-download'),
+    install: () => ipcRenderer.invoke('update-install'),
+  },
   onNavigate: subscribe('navigate'),
 });

@@ -189,6 +189,22 @@ server_packages.sii -text
 server_packages.dat binary
 ```
 
+## Aggiornamenti
+
+Nella barra laterale, sopra il tema, c'è il riquadro della versione: controllo delle nuove versioni (automatico all'avvio e ogni 6 ore, oppure con il pulsante), download con avanzamento e **Restart to update**. Le stesse azioni sono nel menu del tray. Gli aggiornamenti arrivano dalle [release su GitHub](https://github.com/xSpartan155x/ets-server-updater/releases) tramite `electron-updater`:
+
+- solo l'app installata con il setup si aggiorna da sola; la versione portable mostra la nuova versione e apre la pagina della release;
+- l'installazione è bloccata mentre il server sta aggiornando ETS2;
+- un aggiornamento scaricato e non installato viene installato all'uscita dall'app.
+
+### Pubblicare una nuova versione
+
+1. Cambiare `version` in `package.json` (es. `2.1.0`).
+2. `npm run dist`: in `release\` vengono creati `ETS2PackageSync-Setup-<versione>.exe`, `ETS2PackageSync-Setup-<versione>.exe.blockmap`, `latest.yml` e la versione portable `ETS2PackageSync-Portable-<versione>.zip`.
+3. Creare la release su GitHub con tag **`v<versione>`** (es. `v2.1.0`) e allegare i file con questi nomi: i primi tre servono all'aggiornamento automatico (senza `latest.yml` le app installate non lo vedono), lo zip è la versione portable.
+
+In alternativa `npm run release` (con la variabile d'ambiente `GH_TOKEN`, token con permesso *Contents: Read and write* sulla repository) crea da solo una release **draft** con tutti i file: basta scrivere le note e pubblicarla.
+
 ## Sviluppo
 
 Requisiti: Node.js 20+.
@@ -197,7 +213,7 @@ Requisiti: Node.js 20+.
 npm install
 npm run dev      REM Vite dev server + Electron con hot reload della UI
 npm run start    REM build della UI ed esecuzione di Electron
-npm run dist     REM crea release\ETS2PackageSync-Setup-<versione>.exe
+npm run dist     REM crea in release\ il setup, il file di update (latest.yml) e lo zip portable
 ```
 
 Per una nuova versione basta cambiare `version` in `package.json`.

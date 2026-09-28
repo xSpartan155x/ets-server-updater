@@ -31,7 +31,7 @@ export default function Guide() {
       <PageHeader title="Guida all'installazione" subtitle="Configurazione passo passo del Client e del Server." />
       <div className="px-8 pb-8">
         <article
-          className="guide selectable max-w-4xl rounded-xl border border-slate-200 bg-white px-8 py-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none"
+          className="guide selectable rounded-xl border border-slate-200 bg-white px-8 py-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none"
           onClick={onClick}
         >
           <p>Questa guida spiega passo per passo come configurare <strong>ETS2 Package Sync</strong> sul PC da cui esporti i pacchetti (<strong>Client</strong>) e sul PC che fa girare il server dedicato di ETS2 (<strong>Server</strong>).</p>
@@ -51,7 +51,8 @@ l'app fa il push                                       sostituisce, riavvia ETS2
           <li><a href="#8-token-per-repository-private">Token per repository private</a></li>
           <li><a href="#9-prova-completa">Prova completa</a></li>
           <li><a href="#10-console-e-controllo-del-server">Console e controllo del server</a></li>
-          <li><a href="#11-problemi-comuni">Problemi comuni</a></li>
+          <li><a href="#11-aggiornare-lapp">Aggiornare l&#39;app</a></li>
+          <li><a href="#12-problemi-comuni">Problemi comuni</a></li>
           </ol>
           <hr />
           <h2 id="1-cosa-serve">1. Cosa serve</h2>
@@ -393,7 +394,18 @@ server_packages.dat binary`}</code></pre>
           <p>Gli errori sono in rosso, i warning in giallo, le righe <code>[MP]</code> (multiplayer) in azzurro. Il log viene riletto da capo a ogni avvio del server.</p>
           <Shot name="server-console" alt="Pagina Console" />
           <p>Se il server si chiude subito dopo l&#39;avvio, la risposta è quasi sempre nelle ultime righe della Console.</p>
-          <h2 id="11-problemi-comuni">11. Problemi comuni</h2>
+          <h2 id="11-aggiornare-lapp">11. Aggiornare l&#39;app</h2>
+          <p>In basso a sinistra, sopra la scelta del tema, c&#39;è il riquadro della <strong>versione</strong>. L&#39;app controlla da sola le nuove versioni all&#39;avvio e ogni 6 ore, e mostra una notifica quando ne trova una.</p>
+          <ol>
+          <li>Quando compare <strong>Version X available</strong> clicca <strong>Download</strong> (con <strong>Notes</strong> leggi le novità su GitHub).</li>
+          <li>Finito il download clicca <strong>Restart to update</strong>: l&#39;app si chiude, si aggiorna e riparte da sola con le stesse impostazioni.</li>
+          </ol>
+          <p>Il pulsante con le frecce controlla subito. Le stesse voci sono nel menu del tray. Se non riavvii, l&#39;aggiornamento scaricato viene installato alla prossima uscita dall&#39;app (<strong>Exit</strong>).</p>
+          <blockquote>
+          <p>Sul PC Server l&#39;aggiornamento non viene installato mentre ETS2 si sta aggiornando. Il server dedicato non viene fermato: riaggiornare l&#39;app non interrompe la partita.</p>
+          </blockquote>
+          <p>La versione <strong>portable</strong> (.zip) non si aggiorna da sola: <strong>Open release</strong> apre la pagina da cui scaricarla.</p>
+          <h2 id="12-problemi-comuni">12. Problemi comuni</h2>
           <table>
           <thead>
           <tr>

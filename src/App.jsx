@@ -7,6 +7,7 @@ import Settings from './pages/Settings';
 import Logs from './pages/Logs';
 import Console from './pages/Console';
 import Guide from './pages/Guide';
+import UpdateCard from './components/UpdateCard';
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -126,6 +127,7 @@ export default function App() {
         </nav>
 
         <div className="space-y-3 p-3">
+          <UpdateCard />
           <ThemeSwitcher value={theme} onChange={changeTheme} />
           <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
             <div className="mb-1 text-[11px] font-medium tracking-wide text-slate-400 uppercase dark:text-slate-500">

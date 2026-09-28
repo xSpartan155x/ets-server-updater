@@ -6,6 +6,7 @@ const log = require('./logger');
 const { DEFAULTS, loadSettings, saveSettings, validateSettings } = require('./settings');
 const { ClientEngine } = require('./client-engine');
 const { ServerEngine } = require('./server-engine');
+const { Updater } = require('./updater');
 
 const APP_NAME = 'ETS2 Package Sync';
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
@@ -18,6 +19,7 @@ let win = null;
 let engine = null;
 let settings = null;
 let quitting = false;
+let updater = null;
 
 // ------------------------------------------------------------------ engine
 
@@ -96,9 +98,29 @@ function updateTray() {
     { label: 'Settings', click: () => showWindow('settings') },
     { label: 'Logs', click: () => showWindow('logs') },
     { type: 'separator' },
+    ...updateMenu(),
     { label: 'Exit', click: () => app.quit() },
   ];
   tray.setContextMenu(Menu.buildFromTemplate(template));
+}
+
+function updateMenu() {
+  const u = updater && updater.state;
+  if (!u) return [];
+  if (u.status === 'downloaded') return [{ label: `Restart to update (${u.latest})`, click: installUpdate }];
+  if (u.status === 'available') return [{ label: `Update available: ${u.latest}`, click: () => showWindow() }];
+  return [{ label: 'Check for updates', enabled: u.status !== 'checking', click: () => updater.check(true) }];
+}
+
+/** Install a downloaded update, unless an update of ETS2 is running. */
+function installUpdate() {
+  if (engine && engine.busy) {
+    notify('An operation is in progress: the app will update when you restart it after it has finished');
+    return { ok: false, error: 'An operation is in progress. Try again when it has finished.' };
+  }
+  quitting = true; // skip the tray-only close and the busy check of before-quit
+  if (!updater.install()) quitting = false;
+  return { ok: quitting };
 }
 
 function notify(body) {
@@ -219,6 +241,10 @@ function registerIpc() {
 
   ipcMain.handle('run-action', (_event, id) => runAction(id));
   ipcMain.handle('public-ip', () => publicIp());
+  ipcMain.handle('update-state', () => updater.state);
+  ipcMain.handle('update-check', () => updater.check(true));
+  ipcMain.handle('update-download', () => updater.download());
+  ipcMain.handle('update-install', () => installUpdate());
   ipcMain.handle('open-external', (_event, url) => {
     if (/^https:\/\//i.test(String(url))) shell.openExternal(String(url)); // links of the Guide page
   });
@@ -278,6 +304,12 @@ if (!app.requestSingleInstanceLock()) {
     }
     applyTheme(settings.theme);
     nativeTheme.on('updated', () => win && !win.isDestroyed() && win.setBackgroundColor(windowBackground()));
+    updater = new Updater();
+    updater.on('change', (state) => {
+      updateTray();
+      if (win && !win.isDestroyed()) win.webContents.send('update', state);
+    });
+    updater.on('notify', notify);
     registerIpc();
 
     tray = new Tray(trayImage('idle'));
@@ -286,6 +318,7 @@ if (!app.requestSingleInstanceLock()) {
 
     createWindow();
     await startEngine();
+    updater.start();
     if (!settings.mode) showWindow('settings');
     else if (!process.argv.includes('--hidden')) showWindow();
   });
