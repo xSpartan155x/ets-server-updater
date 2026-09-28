@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+}
+
+/* The theme (light / dark / system) is chosen in the app and applied by Electron's nativeTheme,
+   which drives prefers-color-scheme: Tailwind's default `dark:` variant follows it. */
+:root {
+  color-scheme: light dark; /* native scrollbars and form controls follow the theme */
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-800 antialiased select-none dark:bg-slate-950 dark:text-slate-200;
+}
+
+input, textarea, .selectable {
+  @apply select-text;
+}

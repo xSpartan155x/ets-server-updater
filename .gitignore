@@ -1,0 +1,20 @@
+# dependencies and build output
+node_modules/
+out/
+release/
+
+# old Python build leftovers
+.venv/
+build/
+dist/
+*.spec
+__pycache__/
+
+# runtime files (if run from inside the repository)
+*.log
+*.log.*
+backups/
+*.new
+
+# stray icon files in the project root (resources/icon.ico is tracked)
+/*.ico
