@@ -17,7 +17,7 @@ const FIELDS = {
   description: { type: 'string', max: 63 },
   welcome_message: { type: 'string', max: 127 },
   password: { type: 'string', max: 63 },
-  max_players: { type: 'int', min: 1, max: 8 },
+  max_players: { type: 'int', min: 1, max: 128 },
   max_vehicles_total: { type: 'int', min: 0, max: 10000 },
   max_ai_vehicles_player: { type: 'int', min: 0, max: 10000 },
   max_ai_vehicles_player_spawn: { type: 'int', min: 0, max: 10000 },
