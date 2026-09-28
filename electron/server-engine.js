@@ -7,6 +7,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { Engine, run, parseRepository, sleep } = require('./engine');
 const { LogTail } = require('./log-tail');
+const { installedBuild } = require('./steamcmd');
 const log = require('./logger');
 const { t, LocalizedError, errorText } = require('./i18n');
 
@@ -14,6 +15,7 @@ const GITHUB_API = 'https://api.github.com';
 const WEBHOOK_PATH = '/github-webhook';
 const MAX_PAYLOAD = 25 * 1024 * 1024;
 const ZERO_SHA = '0'.repeat(40);
+const FIRST_STEAM_CHECK_MS = 60_000; // first check for a new server build, after the start of the app
 
 class UpdateError extends LocalizedError {
   get name() { return 'UpdateError'; }
@@ -30,6 +32,12 @@ const fileSha256 = (file) => (fs.existsSync(file) ? sha256(fs.readFileSync(file)
 /** Split a Windows-style command line into arguments ("quoted parts" allowed). */
 const splitArgs = (text) => [...String(text || '').matchAll(/"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2]);
 
+/** Folder of the dedicated server: the setting, or three levels above <folder>\bin\win_x64\<server>.exe. */
+function serverFolder(settings, exe) {
+  if (settings.server_install_dir) return path.resolve(settings.server_install_dir);
+  return exe ? path.resolve(path.dirname(exe), '..', '..') : '';
+}
+
 /** Retry a file operation that may fail while Windows still holds a lock on the file. */
 async function retry(action, attempts = 10) {
   for (let i = 0; ; i++) {
@@ -43,8 +51,10 @@ async function retry(action, attempts = 10) {
 }
 
 class ServerEngine extends Engine {
-  constructor(settings, game, stateFile) {
+  /** steamcmd: shared SteamCmd instance that keeps the dedicated server up to date. */
+  constructor(settings, game, stateFile, steamcmd) {
     super(settings, game);
+    this.steamcmd = steamcmd;
     this.mode = 'server';
     this.stateFile = stateFile;
     this.branch = settings.branch;
@@ -54,9 +64,11 @@ class ServerEngine extends Engine {
     ]);
     this.exe = settings.executable ? path.resolve(settings.executable) : '';
     this.workdir = settings.working_directory || (this.exe && path.dirname(this.exe));
+    this.installDir = serverFolder(settings, this.exe);
     this.backupRoot = settings.backup_dir || path.join(path.dirname(settings.sii_path || '.'), 'backups');
     this.secret = settings.webhook_secret || '';
     this.consoleFile = settings.server_log_path || path.join(path.dirname(settings.sii_path || '.'), 'server.log.txt');
+    this.configFile = settings.server_config_path || path.join(path.dirname(settings.sii_path || '.'), 'server_config.sii');
     this.console = new LogTail(this.consoleFile);
     this.console.on('lines', (update) => this.emit('console', update));
     this.history = this.loadHistory();
@@ -67,6 +79,9 @@ class ServerEngine extends Engine {
     this.serverRunning = false;
     this.server = null;
     this.monitorTimer = null;
+    this.steamTimers = [];
+    // latest build on Steam (saved in the state file); phase: step of SteamCMD while it updates the server
+    this.steam = { latest: this.history.steam_latest || '', checkedAt: this.history.steam_checked || '', phase: null };
   }
 
   // ------------------------------------------------------------------ lifecycle
@@ -82,12 +97,39 @@ class ServerEngine extends Engine {
     this.setStatus('status.idle', 'ok');
     this.refreshServerState(true);
     this.monitorTimer = setInterval(() => this.refreshServerState(), 15_000);
+    this.scheduleSteamChecks();
+  }
+
+  /** Periodic check of Steam for a new build of the dedicated server (server_update_hours, 0 = off). */
+  scheduleSteamChecks() {
+    const hours = Number(this.s.server_update_hours);
+    if (!this.steamcmd || !hours) return;
+    this.steamTimers = [
+      setTimeout(() => this.queueSteamCheck(false), FIRST_STEAM_CHECK_MS),
+      setInterval(() => this.queueSteamCheck(false), hours * 60 * 60_000),
+    ];
+  }
+
+  /** New update options from the Server page, applied without restarting the engine (the server keeps running). */
+  updateOptions(settings) {
+    this.s = settings;
+    this.installDir = serverFolder(settings, this.exe);
+    for (const timer of this.steamTimers) clearTimeout(timer);
+    this.steamTimers = [];
+    if (!this.stopped) this.scheduleSteamChecks();
+    this.emit('change');
+  }
+
+  queueSteamCheck(manual) {
+    if (this.jobs.some((job) => job.kind === 'steam-check')) return;
+    this.enqueue({ kind: 'steam-check', manual });
   }
 
   stop() {
     this.stopped = true;
     this.jobs = [];
     clearInterval(this.monitorTimer);
+    for (const timer of this.steamTimers) clearTimeout(timer); // clearTimeout also clears intervals
     this.console.stop();
     if (this.server) {
       this.server.close();
@@ -102,7 +144,28 @@ class ServerEngine extends Engine {
       t(this.serverRunning ? 'tray.gameRunning' : 'tray.gameStopped', { game: this.game.name }),
       t('tray.lastUpdate', { value: this.lastUpdateText() }),
       t('tray.webhook', { port: this.s.webhook_port, path: WEBHOOK_PATH }),
+      this.steamLine(),
     ];
+  }
+
+  /** Tray line about the build of the dedicated server. */
+  steamLine() {
+    const installed = this.installedBuild();
+    if (installed && this.steam.latest && installed !== this.steam.latest) {
+      return t('tray.serverBuildNew', { build: installed, latest: this.steam.latest });
+    }
+    return t('tray.serverBuild', { build: installed || '?' });
+  }
+
+  /**
+   * Build of the installed server. The Steam manifest is the source; when SteamCMD confirmed a build but the
+   * manifest says otherwise (e.g. a manifest of the Steam client), the confirmed build wins until the manifest
+   * changes, so the server is not updated again at every check.
+   */
+  installedBuild() {
+    const manifest = installedBuild(this.installDir, this.game.serverAppId);
+    const confirmed = this.history.steam_confirmed;
+    return confirmed && manifest && confirmed.manifest === manifest ? confirmed.build : manifest;
   }
 
   actions() {
@@ -111,6 +174,8 @@ class ServerEngine extends Engine {
       { id: 'start', label: t('action.start', { game: this.game.name }) },
       { id: 'stop', label: t('action.stop', { game: this.game.name }) },
       { id: 'restart', label: t('action.restart', { game: this.game.name }) },
+      { id: 'steam-check', label: t('action.steamCheck') },
+      { id: 'steam-update', label: t('action.steamUpdate', { game: this.game.name }) },
     ];
   }
 
@@ -125,6 +190,17 @@ class ServerEngine extends Engine {
         webhookPath: WEBHOOK_PATH,
         queued: this.jobs.length,
         consoleFile: this.consoleFile,
+        configFile: this.configFile,
+        steam: {
+          appId: this.game.serverAppId,
+          installDir: this.installDir,
+          installed: this.installedBuild(),
+          latest: this.steam.latest,
+          checkedAt: this.steam.checkedAt,
+          phase: this.steam.phase,
+          auto: Boolean(this.s.server_auto_update),
+          hours: Number(this.s.server_update_hours),
+        },
       },
     };
   }
@@ -132,6 +208,8 @@ class ServerEngine extends Engine {
   runAction(id) {
     if (id === 'update') this.enqueue({ kind: 'manual' });
     if (['start', 'stop', 'restart'].includes(id)) this.enqueue({ kind: id });
+    if (id === 'steam-check') this.queueSteamCheck(true);
+    if (id === 'steam-update') this.enqueue({ kind: 'steam-update' });
   }
 
   lastUpdateText() {
@@ -157,6 +235,10 @@ class ServerEngine extends Engine {
       this.history.last_commit = sha;
       this.history.last_update = new Date().toLocaleString();
     }
+    this.saveHistory();
+  }
+
+  saveHistory() {
     fs.mkdirSync(path.dirname(this.stateFile), { recursive: true });
     fs.writeFileSync(this.stateFile, JSON.stringify(this.history, null, 2));
   }
@@ -429,6 +511,94 @@ class ServerEngine extends Engine {
     return staged;
   }
 
+  // ------------------------------------------------------------------ dedicated server files (SteamCMD)
+
+  /** Status while SteamCMD is downloaded or set up (first use only). */
+  steamPhase(phase) {
+    this.setStatus(phase === 'download' ? 'status.steamcmdDownload' : 'status.steamcmdSetup', 'busy');
+  }
+
+  /** Ask Steam for the latest build; scheduled checks install it when server_auto_update is on. */
+  async checkServerBuild(manual) {
+    if (!this.steamcmd) return;
+    this.setStatus('status.steamChecking', 'busy');
+    const latest = await this.steamcmd.latestBuild(this.game.serverAppId, (phase) => this.steamPhase(phase));
+    this.steam.latest = latest;
+    this.steam.checkedAt = new Date().toLocaleString();
+    this.history.steam_latest = latest;
+    this.history.steam_checked = this.steam.checkedAt;
+    this.saveHistory();
+
+    const installed = this.installedBuild();
+    if (!installed) {
+      this.log.info(`Latest server build on Steam: ${latest}; installed build unknown (use "Update server" once)`);
+      return;
+    }
+    if (installed === latest) {
+      if (manual) this.log.info(`Server build ${installed} is the latest`);
+      return;
+    }
+    this.log.info(`New server build on Steam: ${latest} (installed ${installed})`);
+    if (manual || !this.s.server_auto_update) {
+      if (this.steam.notified !== latest) { // once per build, not at every periodic check
+        this.steam.notified = latest;
+        this.notify(t('notify.serverUpdateAvailable', { game: this.game.name, build: latest }));
+      }
+      return;
+    }
+    await this.updateServerFiles();
+  }
+
+  /** Install the latest build with SteamCMD: stop the server if running, update, start it again. */
+  async updateServerFiles() {
+    if (!this.steamcmd) return;
+    if (!this.installDir) throw new UpdateError('err.installDirUnknown');
+    const wasRunning = (await this.findServer()).length > 0;
+    if (wasRunning) {
+      this.setStatus('status.stoppingGame', 'busy');
+      await this.stopServer();
+    }
+    const before = this.installedBuild();
+    this.log.info(`Updating the server files with SteamCMD in ${this.installDir}`);
+    let result = null;
+    let error = null;
+    try {
+      result = await this.steamcmd.update(this.game.serverAppId, this.installDir, ({ phase, bytes }) => {
+        this.steam.phase = phase;
+        const size = bytes ? `${Math.max(1, Math.round(bytes / 1024 / 1024))} MB` : '';
+        this.setStatus(phase === 'downloading' && size ? 'status.steamDownloadingSize' : `status.steam.${phase}`, 'busy', { size });
+      }, (phase) => this.steamPhase(phase));
+    } catch (err) {
+      error = err;
+    }
+    this.steam.phase = null;
+    if (wasRunning) {
+      if (error) {
+        await this.ensureServerRunning(); // never leave the server down
+      } else {
+        this.setStatus('status.startingGame', 'busy');
+        if (!(await this.startServer())) throw new UpdateError('err.exitedAfterStart', { game: this.game.name });
+      }
+    }
+    if (error) throw error;
+
+    // SteamCMD installed the latest build: remember it if the manifest shows another number
+    const manifest = installedBuild(this.installDir, this.game.serverAppId);
+    if (this.steam.latest && manifest && manifest !== this.steam.latest) {
+      this.history.steam_confirmed = { manifest, build: this.steam.latest };
+    } else {
+      delete this.history.steam_confirmed;
+    }
+    this.saveHistory();
+    const build = this.installedBuild();
+    if (result === 'up-to-date' && build === before) {
+      this.log.info(`Server files already up to date (build ${build || '?'})`);
+    } else {
+      this.log.info(`Server files updated to build ${build || '?'}`);
+      this.notify(t('notify.serverUpdated', { game: this.game.name, build: build || '?' }));
+    }
+  }
+
   // ------------------------------------------------------------------ update
 
   async applyUpdate(sha) {
@@ -493,6 +663,10 @@ class ServerEngine extends Engine {
         } else if (job.kind === 'start') {
           this.setStatus('status.startingGame', 'busy');
           if (!(await this.startServer())) throw new UpdateError('err.exitedAfterStart', { game: this.game.name });
+        } else if (job.kind === 'steam-check') {
+          await this.checkServerBuild(job.manual);
+        } else if (job.kind === 'steam-update') {
+          await this.updateServerFiles();
         } else if (job.kind === 'stop') {
           this.setStatus('status.stoppingGame', 'busy');
           await this.stopServer();
@@ -507,9 +681,15 @@ class ServerEngine extends Engine {
         }
         this.setStatus('status.idle', 'ok');
       } catch (err) {
-        this.log.error(`${job.kind} job failed`, err);
-        this.setError(err);
-        this.notify(t('notify.updateFailed', { message: errorText(err) }));
+        if (job.kind === 'steam-check' && !job.manual) {
+          // a failed background check (e.g. no internet) must not bother the user: retried at the next check
+          this.log.warn(`Check of the server build failed: ${err.message}`);
+          this.setStatus('status.idle', 'ok');
+        } else {
+          this.log.error(`${job.kind} job failed`, err);
+          this.setError(err);
+          this.notify(t(job.kind.startsWith('steam') ? 'notify.serverUpdateFailed' : 'notify.updateFailed', { game: this.game.name, message: errorText(err) }));
+        }
       } finally {
         this.busy = false;
         if (job.kind === 'webhook') this.pending.delete(job.sha);

@@ -63,7 +63,8 @@ function Segmented({ options, value, onChange }) {
 }
 
 /** Settings of one game: mode, repository and the fields of the chosen mode. */
-function GameSettings({ game, values, set, localIps }) {
+/** onClientChosen: called when Client is picked (the Git popup opens if Git is missing). */
+function GameSettings({ game, values, set, localIps, onClientChosen }) {
   const t = useT();
   const name = game.name;
   return (
@@ -82,7 +83,10 @@ function GameSettings({ game, values, set, localIps }) {
                 key={id}
                 type="button"
                 title={active ? t('settings.modeClear') : undefined}
-                onClick={() => set('mode')(active ? '' : id)} // a second click leaves the game empty (not configured)
+                onClick={() => {
+                  set('mode')(active ? '' : id); // a second click leaves the game empty (not configured)
+                  if (!active && id === 'client') onClientChosen();
+                }}
                 className={`flex gap-3 rounded-xl border p-4 text-left transition-all ${
                   active
                     ? 'border-orange-500 bg-orange-50/60 ring-2 ring-orange-500/20 dark:bg-orange-500/10'
@@ -188,6 +192,11 @@ function GameSettings({ game, values, set, localIps }) {
                   <PathInput kind="file" value={values.server_log_path} onChange={set('server_log_path')} />
                 </Field>
               </div>
+              <div className="col-span-2">
+                <Field label={t('settings.serverConfig')} hint={t('settings.serverConfigHint')}>
+                  <PathInput kind="file" value={values.server_config_path} onChange={set('server_config_path')} />
+                </Field>
+              </div>
             </Advanced>
           </Card>
 
@@ -230,7 +239,7 @@ function GameSettings({ game, values, set, localIps }) {
 }
 
 /** game: the game chosen in the sidebar; the form keeps the changes of both games until Save settings. */
-export default function Settings({ data, onSaved, game, language, onLanguage }) {
+export default function Settings({ data, onSaved, game, language, onLanguage, onClientChosen }) {
   const t = useT();
   const [form, setForm] = useState(data.settings);
   const [autostart, setAutostart] = useState(data.autostart);
@@ -338,7 +347,7 @@ export default function Settings({ data, onSaved, game, language, onLanguage }) 
           </div>
         </Card>
 
-        <GameSettings key={game} game={GAME[game]} values={form.games[game]} set={set} localIps={data.localIps} />
+        <GameSettings key={game} game={GAME[game]} values={form.games[game]} set={set} localIps={data.localIps} onClientChosen={onClientChosen} />
       </div>
 
       <footer className="sticky bottom-0 border-t border-slate-200 bg-white/90 px-8 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">

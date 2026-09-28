@@ -39,6 +39,11 @@ const GAME_DEFAULTS = {
   stop_timeout_seconds: 30,
   startup_check_seconds: 15,
   server_log_path: '', // shown in the Console page; empty = server.log.txt next to the .sii file
+  server_config_path: '', // server_config.sii edited in Server -> Configuration; empty = next to the .sii file
+  // updates of the dedicated server with SteamCMD
+  server_auto_update: true, // install new builds by itself (stop, update, start)
+  server_update_hours: 2, // how often Steam is checked for a new build; 0 = only with the buttons
+  server_install_dir: '', // folder of the dedicated server; empty = three levels above the executable (...\bin\win_x64)
 };
 
 const NUMBER_KEYS = Object.keys(GAME_DEFAULTS).filter((k) => typeof GAME_DEFAULTS[k] === 'number');
@@ -220,9 +225,10 @@ function parseImport(text) {
     games[id] = {};
     for (const [key, value] of Object.entries(source)) {
       if (!(key in GAME_DEFAULTS)) continue;
-      const valid = typeof GAME_DEFAULTS[key] === 'number'
-        ? Number.isInteger(value) && value >= 0
-        : typeof value === 'string' && value.length <= 4096 && (key !== 'mode' || ['', ...MODES].includes(value));
+      const type = typeof GAME_DEFAULTS[key];
+      const valid = type === 'number' ? Number.isInteger(value) && value >= 0
+        : type === 'boolean' ? typeof value === 'boolean'
+          : typeof value === 'string' && value.length <= 4096 && (key !== 'mode' || ['', ...MODES].includes(value));
       if (valid) games[id][key] = value;
       else skipped.push(`${GAMES[id].name} ${key}`);
     }

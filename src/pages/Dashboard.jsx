@@ -1,6 +1,6 @@
 import {
-  Activity, ArrowRight, CloudUpload, Copy, ExternalLink, FolderGit2, FolderOpen, GitBranch, GitCommit, Cloud,
-  Power, RefreshCw, Server, Settings as SettingsIcon, Webhook,
+  Activity, ChevronRight, TriangleAlert, ArrowRight, CloudUpload, Copy, ExternalLink, FolderGit2, FolderOpen, GitBranch, GitCommit, Cloud,
+  RefreshCw, Server, Settings as SettingsIcon, Webhook,
 } from 'lucide-react';
 import { Button, Card, PageHeader, StatusDot, STATE_STYLES, WebhookUrl } from '../components/ui';
 import { GAME } from '../games';
@@ -100,18 +100,36 @@ function ClientView({ game, g, s }) {
   );
 }
 
-function ServerView({ game, g, localIps }) {
+/** Warning of the Client mode without Git, with the button that opens the Git popup. */
+function GitMissing({ onGitHelp }) {
+  const t = useT();
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+      <TriangleAlert className="size-5 shrink-0" />
+      <p className="flex-1">{t('git.alert')}</p>
+      <Button icon={GitBranch} onClick={onGitHelp} className="py-1 text-xs">{t('git.howTo')}</Button>
+    </div>
+  );
+}
+
+/** Server mode: the package sync (commit, webhook); the dedicated server itself is in the Server page. */
+function ServerView({ game, g, localIps, onNavigate }) {
   const t = useT();
   const d = g.details;
   return (
     <>
       <div className="grid grid-cols-3 gap-4">
-        <Stat icon={Server} label={t('dash.gameServer', { game: game.name })}>
-          <span className={`inline-flex items-center gap-2 ${d.serverRunning ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-            <StatusDot state={d.serverRunning ? 'ok' : 'idle'} />
-            {d.serverRunning ? t('console.running') : t('console.stopped')}
-          </span>
-        </Stat>
+        <button type="button" onClick={() => onNavigate('server')} className="group text-left" title={t('dash.openServer')}>
+          <Stat icon={Server} label={t('dash.gameServer', { game: game.name })}>
+            <span className="flex items-center justify-between gap-2">
+              <span className={`inline-flex items-center gap-2 ${d.serverRunning ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                <StatusDot state={d.serverRunning ? 'ok' : 'idle'} />
+                {d.serverRunning ? t('console.running') : t('console.stopped')}
+              </span>
+              <ChevronRight className="size-4 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </Stat>
+        </button>
         <Stat icon={GitCommit} label={t('dash.installedCommit')}>
           {d.lastCommit ? <span className="font-mono">{d.lastCommit.slice(0, 7)}</span> : t('dash.noneYet')}
         </Stat>
@@ -124,7 +142,7 @@ function ServerView({ game, g, localIps }) {
   );
 }
 
-export default function Dashboard({ data, snapshot, logs, game: id, onNavigate }) {
+export default function Dashboard({ data, snapshot, logs, game: id, onNavigate, git, onGitHelp }) {
   const t = useT();
   const game = GAME[id];
   const g = snapshot.games[id];
@@ -157,7 +175,6 @@ export default function Dashboard({ data, snapshot, logs, game: id, onNavigate }
       { id: 'push', label: t('action.push'), icon: CloudUpload, primary: true },
     ]
     : [
-      { id: 'restart', label: t('action.restart', { game: game.name }), icon: Power },
       { id: 'update', label: t('action.update'), icon: RefreshCw, primary: true },
     ];
 
@@ -180,10 +197,11 @@ export default function Dashboard({ data, snapshot, logs, game: id, onNavigate }
         ))}
       </PageHeader>
       <div className="space-y-4 px-8 pb-8">
+        {g.mode === 'client' && git && !git.found && <GitMissing onGitHelp={onGitHelp} />}
         <StatusHero snapshot={g} />
         {g.mode === 'client'
           ? <ClientView game={game} g={g} s={data.settings.games[id]} />
-          : <ServerView game={game} g={g} localIps={data.localIps} />}
+          : <ServerView game={game} g={g} localIps={data.localIps} onNavigate={onNavigate} />}
         <RecentActivity logs={logs} onNavigate={onNavigate} />
       </div>
     </>

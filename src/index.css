@@ -5,6 +5,12 @@
   --font-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
 }
 
+/* Indeterminate progress bar (SteamCMD reports no percentage while it runs) */
+@keyframes slide {
+  from { left: -33%; }
+  to { left: 100%; }
+}
+
 /* The theme (light / dark / system) is chosen in the app and applied by Electron's nativeTheme,
    which drives prefers-color-scheme: Tailwind's default `dark:` variant follows it. */
 :root {

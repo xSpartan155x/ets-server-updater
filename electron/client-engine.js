@@ -6,6 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { Engine, run, sleep } = require('./engine');
+const { findGit } = require('./git');
 const log = require('./logger');
 const { t, LocalizedError, errorText } = require('./i18n');
 
@@ -45,6 +46,7 @@ class ClientEngine extends Engine {
     this.mode = 'client';
     this.source = settings.documents_path ? path.resolve(settings.documents_path) : '';
     this.tempRoot = path.join(TEMP_ROOT, game.id);
+    this.gitExe = 'git'; // replaced in start() by the git found (PATH or usual install folders)
     this.files = [settings.repo_sii_file, settings.repo_dat_file]; // paths inside the repository
     // the game always writes server_packages.sii/.dat: same file names as in the repository
     this.sourceFiles = this.files.map((f) => path.join(this.source, path.basename(f)));
@@ -64,8 +66,9 @@ class ClientEngine extends Engine {
     if (!this.source) throw new LocalizedError('err.docsNotSet', { game: this.game.name });
     if (!fs.existsSync(this.source)) throw new LocalizedError('err.docsNotFound', { game: this.game.name, path: this.source });
     if (!this.s.repository) throw new LocalizedError('err.repoNotSet');
-    const git = await run('git', ['--version']);
-    if (git.code !== 0) throw new LocalizedError('err.gitMissing');
+    const git = await findGit();
+    if (!git) throw new LocalizedError('err.gitMissing');
+    this.gitExe = git.path;
     removeDir(this.tempRoot); // leftovers of a previous run that was interrupted
     this.log.info(`Client mode, watching ${this.source} -> ${this.s.repository} (${this.s.branch})`);
     this.startWatcher();
@@ -114,7 +117,7 @@ class ClientEngine extends Engine {
 
   /** Run git in `cwd`. autocrlf is forced off so the files are stored and compared byte for byte. */
   async git(args, cwd, check = true) {
-    const result = await run('git', ['-c', 'core.autocrlf=false', ...args], {
+    const result = await run(this.gitExe, ['-c', 'core.autocrlf=false', ...args], {
       cwd,
       timeout: 300_000,
       env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },

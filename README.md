@@ -13,7 +13,7 @@ temporaneo -> push                                                    -> sostitu
 ```
 
 - **Client**: controlla la cartella documenti del gioco (`Documenti\Euro Truck Simulator 2` o `Documenti\American Truck Simulator`). Quando il gioco esporta `server_packages.sii` / `.dat` (comando `export_server_packages` nella console), clona la repository in una cartella temporanea, li copia se sono cambiati, fa commit e push e poi elimina il clone.
-- **Server**: riceve il webhook di GitHub, scarica i file del commit, li verifica e li installa riavviando il server dedicato. Non fa polling.
+- **Server**: riceve il webhook di GitHub, scarica i file del commit, li verifica e li installa riavviando il server dedicato. Non fa polling. Tiene anche aggiornato il server dedicato con **SteamCMD** (integrato, scaricato in automatico) quando esce una nuova build del gioco.
 
 ETS2 e ATS possono funzionare **insieme sullo stesso PC**: ogni gioco ha modalità, repository, webhook (porta propria) e stato separati. Si può anche usare un solo gioco e lasciare l'altro senza modalità.
 
@@ -57,10 +57,10 @@ In basso a sinistra nella finestra si sceglie il tema: **chiaro**, **sistema** (
 
 La finestra ha queste pagine:
 
-Dashboard, Console e Impostazioni mostrano il gioco scelto nel menu in alto a sinistra (l'ultimo scelto viene ricordato):
+Dashboard, Server e Impostazioni mostrano il gioco scelto nel menu in alto a sinistra (l'ultimo scelto viene ricordato):
 
 - **Dashboard**: stato, dettagli e pulsanti delle azioni del gioco.
-- **Console** (solo se il gioco è in modalità Server): log del server dedicato in tempo reale e pulsanti Avvia / Ferma / Riavvia.
+- **Server** (solo se il gioco è in modalità Server): gestione del server dedicato. Pulsanti Avvia / Ferma / Riavvia, stato e build, e, come sotto-voci di **Server** nella barra laterale, **Console** (log in tempo reale), **Aggiornamenti** (SteamCMD) e **Configurazione** (`server_config.sii`).
 - **Impostazioni**: generale (lingua, avvio con Windows) e le impostazioni del gioco.
 - **Log**: log in tempo reale (le righe iniziano con `[ETS2]` o `[ATS]`), con filtri e il pulsante *Apri file di log*. Il log è sempre in inglese.
 - **Guida**: guida passo passo alla configurazione, in italiano e in inglese, con immagini per il tema chiaro e scuro.
@@ -82,13 +82,14 @@ In `%APPDATA%\ETS2 Package Sync\`:
 |---|---|
 | `settings.json` | impostazioni, con un blocco per gioco in `games`. Webhook secret e GitHub token sono **cifrati** (Electron safeStorage / Windows DPAPI): solo lo stesso utente Windows può leggerli. Il file delle versioni precedenti viene convertito da solo (le impostazioni diventano quelle di ETS2) |
 | `ets2sync.log` | log (rotazione automatica a 1 MB) |
-| `server_state.json` / `server_state_ats.json` | commit già processati e ultimo aggiornamento del server ETS2 / ATS (solo Server) |
+| `server_state.json` / `server_state_ats.json` | commit già processati, ultimo aggiornamento e ultima build Steam vista del server ETS2 / ATS (solo Server) |
+| `steamcmd\` | SteamCMD, scaricato al primo uso dalla modalità Server (circa 150 MB) |
 
 ## Modalità Client
 
 Prerequisiti:
 
-1. **Git for Windows** installato.
+1. **Git for Windows** installato. Se manca, l'app mostra il popup *Git non rilevato* con il link per scaricarlo; dopo l'installazione *Ricontrolla* avvia la modalità Client senza riavviare l'app (Git viene cercato anche in `Program Files\Git`, quindi il PATH non serve).
 2. Accesso in scrittura alla repository GitHub. Al primo push compare la finestra di accesso di Git Credential Manager; le credenziali restano salvate in Windows e l'app non contiene token.
 
 Non serve clonare nulla a mano: l'app lavora su un clone temporaneo.
@@ -140,11 +141,39 @@ Impostazioni (per gioco):
 
 **Controllo all'avvio**: il server deve restare attivo per quei secondi dopo l'avvio, altrimenti l'aggiornamento viene annullato (0 = disattivato).
 
+### Aggiornamento del server dedicato (SteamCMD)
+
+Quando SCS aggiorna il gioco serve anche la nuova build del server dedicato. Il PC Server la installa da solo (opzioni in **Server → Aggiornamenti**: si applicano subito, senza riavviare il server):
+
+| Campo | Descrizione |
+|---|---|
+| Aggiorna il server automaticamente | Attivo (default): con una nuova build ferma il server, lo aggiorna e lo riavvia. Disattivo: solo una notifica |
+| Controlla Steam ogni (ore) | Default 2; 0 = solo con i pulsanti della pagina Server |
+| Cartella del server | Dove SteamCMD installa i file. Vuota = la cartella che contiene `bin\win_x64` dell'eseguibile |
+
+- SteamCMD viene scaricato da Valve al primo uso in `%APPDATA%\ETS2 Package Sync\steamcmd\` e usato in modo anonimo (i server dedicati sono gratuiti): App ID `1948160` per ETS2, `2239530` per ATS.
+- La build installata viene letta dal manifest di Steam (`steamapps\appmanifest_<id>.acf`), l'ultima con `app_info_print`. Se il server è stato installato con il client Steam o a mano e la build risulta *Sconosciuta*, basta un clic su **Aggiorna server**; lo stesso pulsante installa anche il server da zero nella cartella dell'eseguibile.
+- Un aggiornamento alla volta: SteamCMD è condiviso tra ETS2 e ATS, e l'aggiornamento del server entra nella stessa coda degli aggiornamenti dei pacchetti.
+- Se SteamCMD fallisce il server riparte con i file di prima. Un controllo automatico non riuscito (es. internet assente) finisce solo nel log e viene riprovato al controllo successivo.
+- SteamCMD scrive l'avanzamento solo alla fine; l'app legge il suo log (`steamcmd\logs\content_log.txt`) per mostrare la fase: preparazione, download con la dimensione, verifica, installazione.
+
 Per il `server_logon_token` di Steam l'App ID è `227300` per ETS2 e `270880` per ATS.
 
-### Console
+### Pagina Server
 
-La pagina **Console** (solo modalità Server) mostra in tempo reale il log del server dedicato (`server.log.txt`, di default accanto al file `.sii`; modificabile nelle *Opzioni avanzate*) e ha i pulsanti **Avvia**, **Ferma** e **Riavvia**, disponibili anche nel menu del tray. Il log viene riletto da capo a ogni avvio del server. Filtro testo e *Nascondi warning* nascondono le righe che non interessano (es. i `Missing default icon`).
+La pagina **Server** (solo modalità Server) è il gestore del server dedicato del gioco scelto: in alto i pulsanti **Avvia**, **Ferma** e **Riavvia** (anche nel menu del tray) con stato, build installata e ultima build su Steam; nella barra laterale **Server** si apre a tendina con le sotto-voci **Console** e **Aggiornamenti** (SteamCMD: build, **Controlla**, **Aggiorna server** e fase dell'aggiornamento in corso).
+
+La pagina **Console** mostra in tempo reale il log del server dedicato (`server.log.txt`, di default accanto al file `.sii`; modificabile nelle *Opzioni avanzate*). Il log viene riletto da capo a ogni avvio del server. Filtro testo e *Nascondi warning* nascondono le righe che non interessano (es. i `Missing default icon`).
+
+### Configurazione del server (server_config.sii)
+
+In **Server → Configurazione** si modifica il `server_config.sii` del server dedicato: sessione (nome, descrizione, messaggio di benvenuto, password, giocatori massimi 1-8), token di login di Steam (App ID `227300` ETS2, `270880` ATS), opzioni di gioco, veicoli AI, porte e moderatori.
+
+- Il file è quello accanto a `server_packages.sii` (percorso modificabile nelle *Opzioni avanzate* del server). Se manca, si crea in gioco con `export_server_config` nella console.
+- Vengono riscritti solo i valori: indentazione, commenti, fine riga e chiavi sconosciute restano uguali. La versione precedente finisce in `server_config.sii.bak`, la scrittura è atomica.
+- Moderatori: nel file restano gli Steam ID, nell'app si vedono nome e avatar di Steam (letti dal profilo pubblico `steamcommunity.com/profiles/<id>?xml=1`, senza chiave API, con cache in `steam_profiles.json`). Per aggiungerne uno basta lo Steam ID o il link del profilo, anche `steamcommunity.com/id/<nome>`.
+- I valori vengono controllati prima di salvare (lunghezza dei testi, 1-8 giocatori, porte 0-65535, token alfanumerico, Steam ID numerici).
+- Il server legge il file all'avvio: **Salva e riavvia il server** applica subito le modifiche.
 
 ### Rete
 
@@ -179,7 +208,7 @@ In caso di errore:
 - errore durante la sostituzione: ripristino del backup e riavvio del server;
 - il server si chiude subito con i nuovi file: ripristino del backup e riavvio con i file precedenti. Quel commit non viene riprovato automaticamente (si può forzare con **Aggiorna ora**).
 
-**Esci** e **Salva impostazioni** sono bloccati mentre un aggiornamento è in corso.
+**Esci** e **Salva impostazioni** sono bloccati mentre un aggiornamento (dei pacchetti o del server) è in corso.
 
 ## Configurare il webhook su GitHub
 
@@ -262,8 +291,12 @@ electron/
   logger.js          log su file + feed live per la UI
   engine.js          base comune e utility
   client-engine.js   modalità Client (watch + git)
-  server-engine.js   modalità Server (webhook + aggiornamento del server dedicato)
-src/                 UI React + Tailwind (Dashboard, Console, Impostazioni, Log, Guida)
+  server-engine.js   modalità Server (webhook + aggiornamento dei pacchetti e del server dedicato)
+  steamcmd.js        SteamCMD: download al primo uso, build installata e su Steam, app_update
+  server-config.js   lettura e scrittura di server_config.sii (solo i valori)
+  steam-profiles.js  nomi e avatar Steam dei moderatori, link del profilo -> Steam ID
+  git.js             ricerca di Git for Windows (PATH e cartelle d'installazione)
+src/                 UI React + Tailwind (Dashboard, Server, Impostazioni, Log, Guida)
   locales/           testi dell'interfaccia
   assets/guide/      screenshot della guida: <nome>.png (tema chiaro) e <nome>-dark.png (tema scuro)
 resources/           icona dell'app (ETS2 + ATS, .ico/.png), icone dei giochi (ets2.png, ats.png/.ico) e del tray

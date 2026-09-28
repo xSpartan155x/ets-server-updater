@@ -20,7 +20,7 @@ l'app fa il push                                       sostituisce, riavvia ETS2
       <li><a href="#7-creare-il-webhook-su-github">Creare il webhook su GitHub</a></li>
       <li><a href="#8-token-per-repository-private">Token per repository private</a></li>
       <li><a href="#9-prova-completa">Prova completa</a></li>
-      <li><a href="#10-console-e-controllo-del-server">Console e controllo del server</a></li>
+      <li><a href="#10-pagina-server">Pagina Server: controllo, console e aggiornamenti</a></li>
       <li><a href="#11-aggiornare-lapp">Aggiornare l&#39;app</a></li>
       <li><a href="#12-problemi-comuni">Problemi comuni</a></li>
       </ol>
@@ -91,8 +91,9 @@ server_packages.dat binary`}</code></pre>
       <p>Il Client è il PC su cui giochi ed esporti i pacchetti.</p>
       <h3 id="41-git-for-windows">4.1 Git for Windows</h3>
       <p>Installa <a href="https://git-scm.com/download/win">Git for Windows</a> lasciando le opzioni predefinite. L&#39;app lo usa per fare il push: non devi clonare nulla a mano e non serve nessun token, le credenziali le gestisce Git.</p>
+      <p>Se Git manca, quando scegli la modalità <strong>Client</strong> (e a ogni avvio) compare il popup <strong>Git non rilevato</strong>: <strong>Scarica Git for Windows</strong> apre la pagina di download; dopo l&#39;installazione clicca <strong>Ricontrolla</strong> e la modalità Client parte subito, senza riavviare l&#39;app.</p>
       <h3 id="42-modalità">4.2 Modalità</h3>
-      <p>In alto a sinistra clicca sul nome del gioco e scegli <strong>Euro Truck Simulator 2</strong> o <strong>American Truck Simulator</strong>: Dashboard, Console e Impostazioni mostrano sempre il gioco scelto. Poi in <strong>Impostazioni</strong> scegli <strong>Client</strong>. In <strong>Generale</strong> attiva <strong>Avvia con Windows</strong> se vuoi che l&#39;app parta da sola all&#39;accesso (si avvia ridotta nel tray).</p>
+      <p>In alto a sinistra clicca sul nome del gioco e scegli <strong>Euro Truck Simulator 2</strong> o <strong>American Truck Simulator</strong>: Dashboard, Server e Impostazioni mostrano sempre il gioco scelto. Poi in <strong>Impostazioni</strong> scegli <strong>Client</strong>. In <strong>Generale</strong> attiva <strong>Avvia con Windows</strong> se vuoi che l&#39;app parta da sola all&#39;accesso (si avvia ridotta nel tray).</p>
       <Shot name="client-modalita" alt="Modalità Client" />
       <h3 id="43-repository">4.3 Repository</h3>
       <p>Nella scheda <strong>Repository GitHub</strong>:</p>
@@ -201,7 +202,7 @@ server_packages.dat binary`}</code></pre>
       </tr>
       <tr>
       <td>File di log del server</td>
-      <td>il log mostrato nella pagina <strong>Console</strong>. Vuoto = <code>server.log.txt</code> accanto al <code>.sii</code></td>
+      <td>il log mostrato in <strong>Server → Console</strong>. Vuoto = <code>server.log.txt</code> accanto al <code>.sii</code></td>
       </tr>
       </tbody></table>
       <h3 id="53-webhook">5.3 Webhook</h3>
@@ -218,7 +219,7 @@ server_packages.dat binary`}</code></pre>
       <Shot name="server-dashboard" alt="Dashboard del Server" />
       <ul>
       <li><strong>Aggiorna ora</strong>: scarica subito l&#39;ultimo commit da GitHub e lo installa (utile anche per provare la configurazione).</li>
-      <li><strong>Riavvia ETS2</strong> (o <strong>Riavvia ATS</strong>): riavvia il server dedicato.</li>
+      <li>il riquadro <strong>Server ETS2</strong> (o <strong>Server ATS</strong>) apre la pagina <strong>Server</strong>, dove si avvia, ferma e riavvia il server dedicato (sezione 10).</li>
       </ul>
       <h3 id="55-ets2-e-ats-insieme">5.5 ETS2 e ATS sullo stesso PC</h3>
       <p>Per gestire entrambi i server dallo stesso PC, configura prima un gioco, poi scegli l&#39;altro dal menu in alto a sinistra e ripeti i passi 5.1-5.4. Le differenze:</p>
@@ -252,6 +253,18 @@ server_packages.dat binary`}</code></pre>
       </tr>
       </tbody></table>
       <p>Ogni gioco usa la sua repository, il suo webhook secret e il suo webhook su GitHub. Nella pagina <strong>Log</strong> le righe iniziano con <code>[ETS2]</code> o <code>[ATS]</code>; le notifiche riportano il nome del gioco.</p>
+      <h3 id="56-aggiornamenti-del-server-steamcmd">5.6 Aggiornamenti del server dedicato (SteamCMD)</h3>
+      <p>Quando SCS pubblica un aggiornamento del gioco, anche il server dedicato va aggiornato. Il PC Server lo fa da solo con <strong>SteamCMD</strong>, senza client Steam e senza account: i server dedicati di ETS2 e ATS si scaricano in modo anonimo.</p>
+      <ul>
+      <li>La prima volta l&#39;app scarica SteamCMD nella sua cartella dati (circa 150 MB, un minuto circa).</li>
+      <li>Ogni 2 ore (<strong>Controlla Steam ogni</strong>) confronta la build installata con l&#39;ultima pubblicata su Steam.</li>
+      <li>Se c&#39;è una build nuova e <strong>Aggiorna il server automaticamente</strong> è attivo, ferma il server, lo aggiorna e lo riavvia. Se è disattivato ricevi solo una notifica.</li>
+      </ul>
+      <p>Le opzioni sono in <strong>Server → Aggiornamenti</strong>, riquadro <strong>Aggiornamenti del server (SteamCMD)</strong>: l&#39;interruttore si applica subito, ore e cartella con <strong>Salva</strong>, senza riavviare il server. <strong>Cartella del server</strong> è la cartella dove SteamCMD installa i file: vuota = quella che contiene <code>bin\win_x64</code> dell&#39;eseguibile, che di solito è giusta.</p>
+      <p>In <strong>Server → Aggiornamenti</strong> il riquadro <strong>Server dedicato (Steam)</strong> mostra la build installata e l&#39;ultima su Steam, con i pulsanti <strong>Controlla</strong> e <strong>Aggiorna server</strong>. Durante l&#39;aggiornamento compare la fase (preparazione, download con la dimensione, verifica, installazione).</p>
+      <blockquote>
+      <p>Se il server è stato installato con il client Steam o copiato a mano, la build installata può risultare <em>Sconosciuta</em>: clicca una volta <strong>Aggiorna server</strong> e da lì in poi gli aggiornamenti sono automatici. Con <strong>Aggiorna server</strong> puoi anche installare il server da zero: imposta prima il percorso dell&#39;eseguibile dove vuoi che venga installato.</p>
+      </blockquote>
       <hr />
       <h2 id="6-aprire-la-porta-del-webhook">6. Aprire la porta del webhook</h2>
       <p>GitHub deve poter raggiungere il PC Server da internet sulla porta del webhook: 8787 per ETS2, 8788 per ATS.</p>
@@ -394,15 +407,20 @@ server_packages.dat binary`}</code></pre>
       <p>La pagina <strong>Log</strong> di ciascun PC mostra tutto quello che succede, con i filtri <em>Warning</em> ed <em>Errori</em> e il pulsante <strong>Apri file di log</strong> per lo storico completo.</p>
       <Shot name="logs" alt="Pagina Logs" />
       <p>Se i file del nuovo commit sono identici a quelli già installati, ETS2 <strong>non</strong> viene riavviato.</p>
-      <h2 id="10-console-e-controllo-del-server">10. Console e controllo del server</h2>
-      <p>Solo in modalità Server, la pagina <strong>Console</strong> mostra in tempo reale il log del server dedicato (<code>server.log.txt</code>) e permette di controllarlo. Mostra il server del gioco scelto in alto a sinistra: la pagina compare solo se quel gioco è in modalità Server.</p>
-      <p>Comandi disponibili:</p>
+      <h2 id="10-pagina-server">10. Pagina Server: controllo, console e aggiornamenti</h2>
+      <p>Solo in modalità Server, la pagina <strong>Server</strong> raccoglie tutto quello che riguarda il server dedicato del gioco scelto in alto a sinistra (compare solo se quel gioco è in modalità Server):</p>
       <ul>
-      <li><strong>Avvia</strong>, <strong>Ferma</strong>, <strong>Riavvia</strong> (anche dal menu del tray);</li>
+      <li>in alto i pulsanti <strong>Avvia</strong>, <strong>Ferma</strong> e <strong>Riavvia</strong> (anche dal menu del tray) e tre riquadri: stato del server, build installata e ultima build su Steam;</li>
+      <li>nella barra laterale <strong>Server</strong> si apre a tendina: la sotto-voce <strong>Console</strong> mostra il log del server dedicato (<code>server.log.txt</code>) in tempo reale;</li>
+      <li>la sotto-voce <strong>Aggiornamenti</strong> gli aggiornamenti del server tramite SteamCMD (sezione 5.6). Un pallino arancione sulla voce indica una build nuova o un aggiornamento in corso.</li>
+      <li>la sotto-voce <strong>Configurazione</strong> modifica il <code>server_config.sii</code> del server: nome, descrizione, messaggio di benvenuto, password, giocatori massimi, token di login di Steam, opzioni di gioco (danni, traffico, nomi, limitatore...), veicoli AI, porte e moderatori. I moderatori si vedono con nome e avatar di Steam e si aggiungono incollando lo Steam ID o il link del profilo (anche <code>steamcommunity.com/id/nome</code>): nel file l&#39;app scrive sempre lo Steam ID. Vengono cambiati solo i valori: commenti e altre righe del file restano come sono, e la versione precedente viene salvata in <code>server_config.sii.bak</code>. Le modifiche valgono al prossimo avvio del server: <strong>Salva e riavvia il server</strong> le applica subito. Il file è quello accanto a <code>server_packages.sii</code> (percorso modificabile nelle <em>Opzioni avanzate</em> del server); se non esiste, crealo in gioco con il comando <code>export_server_config</code> nella console.</li>
+      </ul>
+      <p>Nella <strong>Console</strong>:</p>
+      <ul>
       <li><strong>Filtra</strong> per cercare una parola, <strong>Nascondi warning</strong> per nascondere i warning (es. i tanti <code>Missing default icon</code>), <strong>Segui</strong> per seguire le nuove righe, <strong>Apri file</strong> per aprire il log.</li>
       </ul>
       <p>Gli errori sono in rosso, i warning in giallo, le righe <code>[MP]</code> (multiplayer) in azzurro. Il log viene riletto da capo a ogni avvio del server.</p>
-      <Shot name="server-console" alt="Pagina Console" />
+      <Shot name="server-console" alt="Pagina Server, scheda Console" />
       <p>Se il server si chiude subito dopo l&#39;avvio, la risposta è quasi sempre nelle ultime righe della Console.</p>
       <h2 id="11-aggiornare-lapp">11. Aggiornare l&#39;app</h2>
       <p>In basso a sinistra, sopra la scelta del tema, c&#39;è il riquadro della <strong>versione</strong>. L&#39;app controlla da sola le nuove versioni all&#39;avvio e ogni 6 ore, e mostra una notifica quando ne trova una.</p>
@@ -429,10 +447,10 @@ server_packages.dat binary`}</code></pre>
       </tr>
       <tr>
       <td><code>ETS2 si è chiuso subito dopo l&#39;avvio</code></td>
-      <td>Il server dedicato si è chiuso da solo: guarda la pagina <strong>Console</strong> per il motivo</td>
+      <td>Il server dedicato si è chiuso da solo: guarda <strong>Server → Console</strong> per il motivo</td>
       </tr>
       <tr>
-      <td><code>Steam log on failed - code ...</code> (nella Console)</td>
+      <td><code>Steam log on failed - code ...</code> (in <strong>Server → Console</strong>)</td>
       <td>Problema del <code>server_logon_token</code> in <code>server_config.sii</code>: mancante, sbagliato, scaduto o già usato da un&#39;altra istanza del server. Generane uno nuovo su <a href="https://steamcommunity.com/dev/managegameservers">https://steamcommunity.com/dev/managegameservers</a> con App ID <code>227300</code> per ETS2 o <code>270880</code> per ATS</td>
       </tr>
       <tr>
@@ -468,8 +486,16 @@ server_packages.dat binary`}</code></pre>
       <td>Funziona solo nell&#39;app installata. Se nella descrizione compare <em>Disattivato in Windows</em>, riattiva l&#39;app in <em>Gestione attività → App di avvio</em></td>
       </tr>
       <tr>
+      <td><code>Aggiornamento con SteamCMD non riuscito: ERROR! ... (Disk write failure)</code></td>
+      <td>Spazio su disco insufficiente o cartella del server non scrivibile. Il server riparte comunque con i file di prima</td>
+      </tr>
+      <tr>
+      <td>Popup <strong>Git non rilevato</strong> anche dopo l&#39;installazione</td>
+      <td>L&#39;installazione di Git non è finita o è in una cartella insolita: reinstalla Git for Windows con le opzioni predefinite e clicca <strong>Ricontrolla</strong></td>
+      </tr>
+      <tr>
       <td><em>Salva impostazioni</em> o <em>Esci</em> non rispondono</td>
-      <td>È in corso un aggiornamento: aspetta che finisca</td>
+      <td>È in corso un aggiornamento (dei pacchetti o del server con SteamCMD): aspetta che finisca</td>
       </tr>
       </tbody></table>
       <p>I file dell&#39;app (impostazioni, log, stato del server) sono in <code>%APPDATA%\ETS2 Package Sync\</code>. Webhook secret e token sono salvati cifrati e leggibili solo dal tuo utente Windows.</p>

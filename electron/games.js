@@ -8,6 +8,7 @@ const GAMES = {
     fullName: 'Euro Truck Simulator 2',
     documentsFolder: 'Euro Truck Simulator 2', // in Documents: where the game writes export_server_packages
     serverExe: 'eurotrucks2_server.exe',
+    serverAppId: 1948160, // Steam app of the dedicated server (anonymous download with SteamCMD)
     defaultPort: 8787,
     icon: 'ets2.png',
   },
@@ -17,6 +18,7 @@ const GAMES = {
     fullName: 'American Truck Simulator',
     documentsFolder: 'American Truck Simulator',
     serverExe: 'amtrucks_server.exe',
+    serverAppId: 2239530,
     defaultPort: 8788,
     icon: 'ats.png',
   },

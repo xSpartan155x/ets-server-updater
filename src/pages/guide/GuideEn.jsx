@@ -20,7 +20,7 @@ the app pushes                                         replaces them, restarts E
       <li><a href="#7-create-the-webhook-on-github">Create the webhook on GitHub</a></li>
       <li><a href="#8-token-for-private-repositories">Token for private repositories</a></li>
       <li><a href="#9-full-test">Full test</a></li>
-      <li><a href="#10-console-and-server-control">Console and server control</a></li>
+      <li><a href="#10-server-page">Server page: control, console and updates</a></li>
       <li><a href="#11-update-the-app">Update the app</a></li>
       <li><a href="#12-common-problems">Common problems</a></li>
       </ol>
@@ -91,8 +91,9 @@ server_packages.dat binary`}</code></pre>
       <p>The Client is the PC you play on and export the packages from.</p>
       <h3 id="41-git-for-windows">4.1 Git for Windows</h3>
       <p>Install <a href="https://git-scm.com/download/win">Git for Windows</a> with the default options. The app uses it to push: you do not have to clone anything by hand and no token is needed, Git handles the credentials.</p>
+      <p>If Git is missing, the <strong>Git not found</strong> popup appears when you choose the <strong>Client</strong> mode (and at every start): <strong>Download Git for Windows</strong> opens the download page; after the installation click <strong>Check again</strong> and the Client mode starts right away, without restarting the app.</p>
       <h3 id="42-mode">4.2 Mode</h3>
-      <p>At the top left click the name of the game and choose <strong>Euro Truck Simulator 2</strong> or <strong>American Truck Simulator</strong>: Dashboard, Console and Settings always show the chosen game. Then in <strong>Settings</strong> choose <strong>Client</strong>. In <strong>General</strong> turn on <strong>Start with Windows</strong> if you want the app to start by itself when you sign in (it starts minimized in the tray).</p>
+      <p>At the top left click the name of the game and choose <strong>Euro Truck Simulator 2</strong> or <strong>American Truck Simulator</strong>: Dashboard, Server and Settings always show the chosen game. Then in <strong>Settings</strong> choose <strong>Client</strong>. In <strong>General</strong> turn on <strong>Start with Windows</strong> if you want the app to start by itself when you sign in (it starts minimized in the tray).</p>
       <Shot name="client-modalita" alt="Client mode" />
       <h3 id="43-repository">4.3 Repository</h3>
       <p>In the <strong>GitHub repository</strong> card:</p>
@@ -201,7 +202,7 @@ server_packages.dat binary`}</code></pre>
       </tr>
       <tr>
       <td>Server log file</td>
-      <td>the log shown in the <strong>Console</strong> page. Empty = <code>server.log.txt</code> next to the <code>.sii</code></td>
+      <td>the log shown in <strong>Server → Console</strong>. Empty = <code>server.log.txt</code> next to the <code>.sii</code></td>
       </tr>
       </tbody></table>
       <h3 id="53-webhook">5.3 Webhook</h3>
@@ -218,7 +219,7 @@ server_packages.dat binary`}</code></pre>
       <Shot name="server-dashboard" alt="Server Dashboard" />
       <ul>
       <li><strong>Update Now</strong>: downloads the latest commit from GitHub and installs it right away (also useful to test the configuration).</li>
-      <li><strong>Restart ETS2</strong> (or <strong>Restart ATS</strong>): restarts the dedicated server.</li>
+      <li>the <strong>ETS2 server</strong> (or <strong>ATS server</strong>) tile opens the <strong>Server</strong> page, where you start, stop and restart the dedicated server (section 10).</li>
       </ul>
       <h3 id="55-ets2-and-ats-together">5.5 ETS2 and ATS on the same PC</h3>
       <p>To manage both servers from the same PC, set up one game first, then choose the other one in the menu at the top left and repeat steps 5.1-5.4. The differences:</p>
@@ -252,6 +253,18 @@ server_packages.dat binary`}</code></pre>
       </tr>
       </tbody></table>
       <p>Each game uses its own repository, webhook secret and webhook on GitHub. In the <strong>Logs</strong> page the lines start with <code>[ETS2]</code> or <code>[ATS]</code>; the notifications show the name of the game.</p>
+      <h3 id="56-server-updates-steamcmd">5.6 Updates of the dedicated server (SteamCMD)</h3>
+      <p>When SCS releases a game update, the dedicated server must be updated too. The Server PC does it by itself with <strong>SteamCMD</strong>, without the Steam client and without an account: the dedicated servers of ETS2 and ATS are downloaded anonymously.</p>
+      <ul>
+      <li>The first time, the app downloads SteamCMD into its data folder (about 150 MB, about a minute).</li>
+      <li>Every 2 hours (<strong>Check Steam every</strong>) it compares the installed build with the latest one on Steam.</li>
+      <li>When there is a new build and <strong>Update the server automatically</strong> is on, it stops the server, updates it and starts it again. When it is off you only get a notification.</li>
+      </ul>
+      <p>The options are in <strong>Server → Updates</strong>, <strong>Server updates (SteamCMD)</strong> card: the switch applies right away, hours and folder with <strong>Save</strong>, without restarting the server. <strong>Server folder</strong> is where SteamCMD installs the files: empty = the folder that contains <code>bin\win_x64</code> of the executable, which is usually right.</p>
+      <p>In <strong>Server → Updates</strong> the <strong>Dedicated server (Steam)</strong> card shows the installed build and the latest one on Steam, with the <strong>Check</strong> and <strong>Update server</strong> buttons. During the update it shows the step (preparing, download with its size, verifying, installing).</p>
+      <blockquote>
+      <p>When the server was installed with the Steam client or copied by hand, the installed build can be <em>Unknown</em>: click <strong>Update server</strong> once and from then on the updates are automatic. <strong>Update server</strong> can also install the server from scratch: first set the path of the executable where you want it installed.</p>
+      </blockquote>
       <hr />
       <h2 id="6-open-the-webhook-port">6. Open the webhook port</h2>
       <p>GitHub must reach the Server PC from the internet on the webhook port: 8787 for ETS2, 8788 for ATS.</p>
@@ -394,15 +407,20 @@ server_packages.dat binary`}</code></pre>
       <p>The <strong>Logs</strong> page of each PC shows everything that happens, with the <em>Warnings</em> and <em>Errors</em> filters and the <strong>Open log file</strong> button for the full history.</p>
       <Shot name="logs" alt="Logs page" />
       <p>If the files of the new commit are identical to the installed ones, ETS2 is <strong>not</strong> restarted.</p>
-      <h2 id="10-console-and-server-control">10. Console and server control</h2>
-      <p>In Server mode only, the <strong>Console</strong> page shows the log of the dedicated server (<code>server.log.txt</code>) live and lets you control it. It shows the server of the game chosen at the top left: the page appears only when that game is in Server mode.</p>
-      <p>Available commands:</p>
+      <h2 id="10-server-page">10. Server page: control, console and updates</h2>
+      <p>In Server mode only, the <strong>Server</strong> page gathers everything about the dedicated server of the game chosen at the top left (it appears only when that game is in Server mode):</p>
       <ul>
-      <li><strong>Start</strong>, <strong>Stop</strong>, <strong>Restart</strong> (also from the tray menu);</li>
+      <li>at the top the <strong>Start</strong>, <strong>Stop</strong> and <strong>Restart</strong> buttons (also in the tray menu) and three tiles: state of the server, installed build and latest build on Steam;</li>
+      <li>in the sidebar <strong>Server</strong> opens like a dropdown: the <strong>Console</strong> sub-item shows the log of the dedicated server (<code>server.log.txt</code>) live;</li>
+      <li>the <strong>Updates</strong> sub-item the updates of the server through SteamCMD (section 5.6). An orange dot on the item means a new build or an update in progress.</li>
+      <li>the <strong>Configuration</strong> sub-item edits the <code>server_config.sii</code> of the server: name, description, welcome message, password, max players, Steam logon token, gameplay options (damage, traffic, name tags, speed limiter...), AI vehicles, ports and moderators. Moderators are shown with their Steam name and avatar and are added by pasting the Steam ID or the link of the profile (also <code>steamcommunity.com/id/name</code>): in the file the app always writes the Steam ID. Only the values change: comments and the other lines of the file stay as they are, and the previous version is saved in <code>server_config.sii.bak</code>. Changes apply at the next start of the server: <strong>Save and restart the server</strong> applies them right away. The file is the one next to <code>server_packages.sii</code> (path in the <em>Advanced options</em> of the server); when it does not exist, create it in the game with the <code>export_server_config</code> console command.</li>
+      </ul>
+      <p>In the <strong>Console</strong>:</p>
+      <ul>
       <li><strong>Filter</strong> to search a word, <strong>Hide warnings</strong> to hide the warnings (e.g. the many <code>Missing default icon</code>), <strong>Follow</strong> to follow the new lines, <strong>Open file</strong> to open the log.</li>
       </ul>
       <p>Errors are red, warnings yellow, <code>[MP]</code> (multiplayer) lines light blue. The log is read again from the top at every start of the server.</p>
-      <Shot name="server-console" alt="Console page" />
+      <Shot name="server-console" alt="Server page, Console tab" />
       <p>If the server closes right after starting, the answer is almost always in the last lines of the Console.</p>
       <h2 id="11-update-the-app">11. Update the app</h2>
       <p>At the bottom left, above the theme switch, there is the <strong>version</strong> card. The app checks for new versions by itself at startup and every 6 hours, and shows a notification when it finds one.</p>
@@ -429,10 +447,10 @@ server_packages.dat binary`}</code></pre>
       </tr>
       <tr>
       <td><code>ETS2 exited right after start</code></td>
-      <td>The dedicated server closed by itself: see the <strong>Console</strong> page for the reason</td>
+      <td>The dedicated server closed by itself: see <strong>Server → Console</strong> for the reason</td>
       </tr>
       <tr>
-      <td><code>Steam log on failed - code ...</code> (in the Console)</td>
+      <td><code>Steam log on failed - code ...</code> (in <strong>Server → Console</strong>)</td>
       <td>Problem with the <code>server_logon_token</code> in <code>server_config.sii</code>: missing, wrong, expired or already used by another instance of the server. Generate a new one on <a href="https://steamcommunity.com/dev/managegameservers">https://steamcommunity.com/dev/managegameservers</a> with App ID <code>227300</code> for ETS2 or <code>270880</code> for ATS</td>
       </tr>
       <tr>
@@ -468,8 +486,16 @@ server_packages.dat binary`}</code></pre>
       <td>It works only in the installed app. If the description says <em>Disabled in Windows</em>, enable the app again in <em>Task Manager → Startup apps</em></td>
       </tr>
       <tr>
+      <td><code>Update with SteamCMD failed: ERROR! ... (Disk write failure)</code></td>
+      <td>Not enough disk space or a server folder that cannot be written. The server starts again anyway with the previous files</td>
+      </tr>
+      <tr>
+      <td><strong>Git not found</strong> popup even after installing Git</td>
+      <td>The installation of Git did not finish or used an unusual folder: install Git for Windows again with the default options and click <strong>Check again</strong></td>
+      </tr>
+      <tr>
       <td><em>Save settings</em> or <em>Exit</em> do not respond</td>
-      <td>An update is in progress: wait for it to finish</td>
+      <td>An update is in progress (of the packages or of the server with SteamCMD): wait for it to finish</td>
       </tr>
       </tbody></table>
       <p>The files of the app (settings, log, server state) are in <code>%APPDATA%\ETS2 Package Sync\</code>. Webhook secret and token are stored encrypted and readable only by your Windows user.</p>

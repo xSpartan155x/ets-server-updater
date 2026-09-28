@@ -8,6 +8,10 @@ const { normalize, activeGames, loadSettings, saveSettings, validateSettings, bu
 const { ClientEngine } = require('./client-engine');
 const { ServerEngine } = require('./server-engine');
 const { GAMES, GAME_IDS } = require('./games');
+const { SteamCmd } = require('./steamcmd');
+const { parseServerConfig, updateServerConfig, checkConfig } = require('./server-config');
+const { SteamProfiles } = require('./steam-profiles');
+const { findGit, DOWNLOAD_URL: GIT_DOWNLOAD_URL } = require('./git');
 const { Updater } = require('./updater');
 const i18n = require('./i18n');
 
@@ -25,6 +29,9 @@ const engines = {}; // game id -> running engine (only for the games in use)
 let settings = null;
 let quitting = false;
 let updater = null;
+let steamcmd = null; // shared by the servers: keeps the dedicated servers up to date
+let git = null; // { path, version } of Git for Windows (Client mode), null when not found
+let steamProfiles = null; // names and avatars of the moderators of server_config.sii
 
 // ------------------------------------------------------------------ engine
 
@@ -52,7 +59,7 @@ async function startEngine(id) {
   const s = settings.games[id];
   // ETS2 keeps the file name of the versions that managed only one game
   const stateFile = path.join(app.getPath('userData'), id === 'ets2' ? 'server_state.json' : `server_state_${id}.json`);
-  const engine = s.mode === 'client' ? new ClientEngine(s, game) : new ServerEngine(s, game, stateFile);
+  const engine = s.mode === 'client' ? new ClientEngine(s, game) : new ServerEngine(s, game, stateFile, steamcmd);
   engines[id] = engine;
   engine.on('change', broadcastState);
   engine.on('notify', (body) => notify(body, undefined, game));
@@ -259,6 +266,7 @@ function registerIpc() {
     canAutostart: app.isPackaged,
     snapshot: snapshot(),
     version: app.getVersion(),
+    git: { found: Boolean(git), version: git ? git.version : '', downloadUrl: GIT_DOWNLOAD_URL },
     locale: i18n.getLanguage(),
     localIps: localIps(),
     logs: log.lines,
@@ -295,7 +303,42 @@ function registerIpc() {
   });
 
   ipcMain.handle('run-action', (_event, game, id) => runAction(game, id));
+
+  // options of the server updates (Server page): saved and applied right away, the server keeps running
+  ipcMain.handle('set-server-updates', (_event, game, values) => {
+    if (!settings.games[game]) return { ok: false, error: '' };
+    const next = { ...settings.games[game] };
+    if ('server_auto_update' in values) next.server_auto_update = Boolean(values.server_auto_update);
+    if ('server_update_hours' in values) {
+      const hours = values.server_update_hours;
+      if (!Number.isInteger(hours) || hours < 0) return { ok: false, error: t('err.hours') };
+      next.server_update_hours = hours;
+    }
+    if ('server_install_dir' in values) next.server_install_dir = String(values.server_install_dir || '').trim();
+    settings.games[game] = next;
+    saveSettings(settings);
+    if (engines[game] && engines[game].updateOptions) engines[game].updateOptions(next);
+    broadcastState();
+    return { ok: true };
+  });
   ipcMain.handle('public-ip', () => publicIp());
+
+  // popup "Git not found": look again (also in the usual install folders) and restart the clients stopped by it
+  ipcMain.handle('check-git', async () => {
+    git = await findGit();
+    if (git) {
+      log.info(`Git found: ${git.version} (${git.path})`);
+      const stopped = runningGames().filter((id) => engines[id].mode === 'client' && engines[id].state === 'error' && !engines[id].busy);
+      for (const id of stopped) {
+        engines[id].removeAllListeners();
+        engines[id].stop();
+        delete engines[id];
+        await startEngine(id);
+      }
+      broadcastState();
+    }
+    return { found: Boolean(git), version: git ? git.version : '', downloadUrl: GIT_DOWNLOAD_URL };
+  });
   ipcMain.handle('update-state', () => updater.view());
   ipcMain.handle('update-check', () => updater.check(true));
   ipcMain.handle('update-download', () => updater.download());
@@ -304,6 +347,58 @@ function registerIpc() {
     if (/^https:\/\//i.test(String(url))) shell.openExternal(String(url)); // links of the Guide page
   });
   ipcMain.handle('open-log-file', () => log.file && shell.openPath(log.file));
+  // server_config.sii of the dedicated server (Server -> Configuration)
+  const configEngine = (game) => (engines[game] && engines[game].mode === 'server' ? engines[game] : null);
+
+  ipcMain.handle('server-config-read', (_event, game) => {
+    const engine = configEngine(game);
+    if (!engine) return { ok: false, error: '' };
+    const file = engine.configFile;
+    if (!fs.existsSync(file)) return { ok: true, file, exists: false };
+    try {
+      return { ok: true, file, exists: true, ...parseServerConfig(fs.readFileSync(file, 'utf8')) };
+    } catch (err) {
+      return { ok: false, file, error: t('err.cfgRead', { message: err.message }) };
+    }
+  });
+
+  ipcMain.handle('server-config-write', (_event, game, values, moderators, restart) => {
+    const engine = configEngine(game);
+    if (!engine) return { ok: false, error: '' };
+    const errors = checkConfig(values, moderators);
+    if (errors.length) return { ok: false, errors };
+    const file = engine.configFile;
+    try {
+      const text = fs.readFileSync(file, 'utf8');
+      const next = updateServerConfig(text, values, moderators);
+      if (next !== text) {
+        fs.copyFileSync(file, `${file}.bak`); // the previous version, in case of a mistake
+        fs.writeFileSync(`${file}.new`, next);
+        fs.renameSync(`${file}.new`, file);
+        engine.log.info(`server_config.sii saved (previous version in server_config.sii.bak)`);
+      }
+    } catch (err) {
+      return { ok: false, error: t('err.cfgWrite', { message: err.message }) };
+    }
+    if (restart) engine.runAction('restart');
+    return { ok: true };
+  });
+
+  // moderators: the file keeps Steam IDs, the UI shows the Steam names
+  ipcMain.handle('steam-profiles', (_event, ids) => steamProfiles.lookup(Array.isArray(ids) ? ids : []));
+  ipcMain.handle('steam-resolve', async (_event, input) => {
+    try {
+      return { ok: true, profile: await steamProfiles.resolve(input) };
+    } catch (err) {
+      return { ok: false, reason: err.message === 'offline' ? 'offline' : 'not-found' };
+    }
+  });
+
+  ipcMain.handle('open-server-config', (_event, game) => {
+    const engine = configEngine(game);
+    if (engine && fs.existsSync(engine.configFile)) shell.openPath(engine.configFile);
+  });
+
   ipcMain.handle('open-console-file', (_event, game) => {
     const engine = engines[game];
     if (engine && engine.consoleFile) shell.openPath(engine.consoleFile);
@@ -418,6 +513,10 @@ if (!app.requestSingleInstanceLock()) {
     applyTheme(settings.theme);
     i18n.setLanguage(i18n.resolveLanguage(settings.language, systemLocales()));
     nativeTheme.on('updated', () => win && !win.isDestroyed() && win.setBackgroundColor(windowBackground()));
+    steamcmd = new SteamCmd(path.join(app.getPath('userData'), 'steamcmd'));
+    steamProfiles = new SteamProfiles(app.getPath('userData'));
+    git = await findGit();
+    if (!git) log.warn('Git for Windows not found: needed only by the Client mode');
     updater = new Updater();
     updater.on('change', (state) => {
       updateTray();

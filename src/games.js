@@ -10,6 +10,7 @@ export const GAMES = [
     icon: ets2Icon,
     documentsFolder: 'Euro Truck Simulator 2',
     serverExe: 'eurotrucks2_server.exe',
+    steamAppId: 227300, // App ID of the game for the server_logon_token
     defaultPort: 8787,
   },
   {
@@ -19,6 +20,7 @@ export const GAMES = [
     icon: atsIcon,
     documentsFolder: 'American Truck Simulator',
     serverExe: 'amtrucks_server.exe',
+    steamAppId: 270880,
     defaultPort: 8788,
   },
 ];
