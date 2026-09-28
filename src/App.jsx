@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, Loader2, Monitor, Moon, ScrollText, Settings as SettingsIcon, Sun } from 'lucide-react';
+import { LayoutDashboard, Loader2, Monitor, Moon, ScrollText, Settings as SettingsIcon, SquareTerminal, Sun } from 'lucide-react';
 import icon from '../resources/icon.png';
 import { StatusDot, STATE_STYLES } from './components/ui';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Logs from './pages/Logs';
+import Console from './pages/Console';
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'console', label: 'Console', icon: SquareTerminal, mode: 'server' },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
   { id: 'logs', label: 'Logs', icon: ScrollText },
 ];
@@ -19,6 +21,7 @@ const THEMES = [
 ];
 
 const MAX_LOGS = 500;
+const MAX_CONSOLE = 2000;
 
 function ThemeSwitcher({ value, onChange }) {
   return (
@@ -46,6 +49,7 @@ export default function App() {
   const [data, setData] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [consoleLines, setConsoleLines] = useState([]);
   const [page, setPage] = useState('dashboard');
   const [theme, setTheme] = useState('system');
 
@@ -54,12 +58,15 @@ export default function App() {
       setData(state);
       setSnapshot(state.snapshot);
       setLogs(state.logs);
+      setConsoleLines(state.console);
       setTheme(state.settings.theme || 'system');
       if (!state.configured) setPage('settings');
     });
     const offs = [
       window.api.onState(setSnapshot),
       window.api.onLog((line) => setLogs((prev) => [...prev.slice(-(MAX_LOGS - 1)), line])),
+      window.api.onConsole(({ reset, lines }) =>
+        setConsoleLines((prev) => (reset ? lines : [...prev, ...lines]).slice(-MAX_CONSOLE))),
       window.api.onNavigate(setPage),
     ];
     return () => offs.forEach((off) => off());
@@ -77,6 +84,7 @@ export default function App() {
     const state = await window.api.getState();
     setData(state);
     setSnapshot(state.snapshot);
+    setConsoleLines(state.console);
   };
 
   const changeTheme = async (next) => {
@@ -98,7 +106,7 @@ export default function App() {
         </div>
 
         <nav className="flex-1 space-y-1 px-3">
-          {NAV.map(({ id, label, icon: Icon }) => (
+          {NAV.filter((item) => !item.mode || item.mode === snapshot.mode).map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -133,6 +141,7 @@ export default function App() {
         {page === 'dashboard' && <Dashboard data={data} snapshot={snapshot} logs={logs} onNavigate={setPage} />}
         {page === 'settings' && <Settings data={data} onSaved={onSaved} />}
         {page === 'logs' && <Logs logs={logs} />}
+        {page === 'console' && snapshot.mode === 'server' && <Console snapshot={snapshot} lines={consoleLines} />}
       </main>
     </div>
   );

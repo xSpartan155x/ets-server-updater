@@ -13,9 +13,11 @@ contextBridge.exposeInMainWorld('api', {
   runAction: (id) => ipcRenderer.invoke('run-action', id),
   browse: (kind, current) => ipcRenderer.invoke('browse', kind, current),
   openLogFile: () => ipcRenderer.invoke('open-log-file'),
+  openConsoleFile: () => ipcRenderer.invoke('open-console-file'),
   publicIp: () => ipcRenderer.invoke('public-ip'),
   setTheme: (theme) => ipcRenderer.invoke('set-theme', theme),
   onState: subscribe('state'),
   onLog: subscribe('log'),
+  onConsole: subscribe('console'),
   onNavigate: subscribe('navigate'),
 });

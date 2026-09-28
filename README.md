@@ -43,7 +43,7 @@ Chiudendo la finestra l'app resta nel tray. Clic sull'icona → dashboard. Tasto
 | Client | Server |
 |---|---|
 | Status, Last push | Status, ETS2 running/stopped, Last update, porta webhook |
-| **Push Now**, **Open Repository** | **Update Now**, **Restart ETS2** |
+| **Push Now**, **Open Repository** | **Update Now**, **Start / Stop / Restart ETS2** |
 | Open Dashboard, Settings, Logs, Exit | Open Dashboard, Settings, Logs, Exit |
 
 Il colore del pallino sull'icona indica lo stato: verde = ok, blu = operazione in corso, rosso = errore, grigio = non configurato.
@@ -118,9 +118,13 @@ Impostazioni:
 | Port | Porta del webhook (default 8787) |
 | Webhook secret | Obbligatorio. **Generate** ne crea uno casuale |
 | GitHub token | Solo per repository **private**: fine-grained token con permesso *Contents: Read-only* su quella repository |
-| *Advanced*: working directory, argomenti, cartella backup, backup da conservare, timeout di stop, startup check, indirizzo di ascolto | |
+| *Advanced*: working directory, argomenti, cartella backup, backup da conservare, timeout di stop, startup check, file di log del server, indirizzo di ascolto | |
 
 **Startup check**: ETS2 deve restare attivo per quei secondi dopo l'avvio, altrimenti l'aggiornamento viene annullato (0 = disattivato).
+
+### Console
+
+La pagina **Console** (solo modalità Server) mostra in tempo reale il log del server ETS2 (`server.log.txt`, di default accanto al file `.sii`; modificabile in *Advanced*) e ha i pulsanti **Start**, **Stop** e **Restart**, disponibili anche nel menu del tray. Il log viene riletto da capo a ogni avvio del server. Filtro testo e *Hide warnings* nascondono le righe che non interessano (es. i `Missing default icon`).
 
 ### Rete
 

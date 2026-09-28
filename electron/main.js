@@ -40,6 +40,9 @@ async function startEngine() {
     : new ServerEngine(settings, path.join(app.getPath('userData'), 'server_state.json'));
   engine.on('change', broadcastState);
   engine.on('notify', notify);
+  engine.on('console', (update) => {
+    if (win && !win.isDestroyed()) win.webContents.send('console', update);
+  });
   try {
     await engine.start();
   } catch (err) {
@@ -184,6 +187,7 @@ function registerIpc() {
     version: app.getVersion(),
     localIps: localIps(),
     logs: log.lines,
+    console: engine && engine.console ? engine.console.lines : [],
   }));
 
   ipcMain.handle('set-theme', (_event, theme) => {
@@ -211,6 +215,7 @@ function registerIpc() {
   ipcMain.handle('run-action', (_event, id) => runAction(id));
   ipcMain.handle('public-ip', () => publicIp());
   ipcMain.handle('open-log-file', () => log.file && shell.openPath(log.file));
+  ipcMain.handle('open-console-file', () => engine && engine.consoleFile && shell.openPath(engine.consoleFile));
 
   ipcMain.handle('browse', async (_event, kind, current) => {
     const filters = kind === 'exe'

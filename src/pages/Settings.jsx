@@ -183,6 +183,11 @@ export default function Settings({ data, onSaved }) {
                 <Field label="Startup check (seconds)" hint="ETS2 must stay up this long, otherwise the update is rolled back. 0 = off.">
                   <NumberInput value={form.startup_check_seconds} onChange={set('startup_check_seconds')} />
                 </Field>
+                <div className="col-span-2">
+                  <Field label="Server log file (Console page)" hint="Empty = server.log.txt next to the .sii file.">
+                    <PathInput kind="file" value={form.server_log_path} onChange={set('server_log_path')} />
+                  </Field>
+                </div>
               </Advanced>
             </Card>
 

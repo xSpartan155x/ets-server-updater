@@ -34,6 +34,7 @@ const DEFAULTS = {
   backup_keep: 10,
   stop_timeout_seconds: 30,
   startup_check_seconds: 15,
+  server_log_path: '', // shown in the Console page; empty = server.log.txt next to the .sii file
 };
 
 const NUMBER_KEYS = Object.keys(DEFAULTS).filter((k) => typeof DEFAULTS[k] === 'number');

@@ -6,6 +6,7 @@ const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
 const { Engine, run, parseRepository, sleep } = require('./engine');
+const { LogTail } = require('./log-tail');
 const log = require('./logger');
 
 const GITHUB_API = 'https://api.github.com';
@@ -54,6 +55,9 @@ class ServerEngine extends Engine {
     this.workdir = settings.ets2_working_directory || (this.exe && path.dirname(this.exe));
     this.backupRoot = settings.backup_dir || path.join(path.dirname(settings.sii_path || '.'), 'backups');
     this.secret = settings.webhook_secret || '';
+    this.consoleFile = settings.server_log_path || path.join(path.dirname(settings.sii_path || '.'), 'server.log.txt');
+    this.console = new LogTail(this.consoleFile);
+    this.console.on('lines', (update) => this.emit('console', update));
     this.history = this.loadHistory();
     this.jobs = [];
     this.pending = new Set();
@@ -73,6 +77,7 @@ class ServerEngine extends Engine {
       if (!this.s[key]) throw new Error(`${name} path not set`);
     }
     await this.startWebhook();
+    this.console.start();
     this.setStatus('Idle', 'ok');
     this.refreshEts2State(true);
     this.monitorTimer = setInterval(() => this.refreshEts2State(), 15_000);
@@ -82,6 +87,7 @@ class ServerEngine extends Engine {
     this.stopped = true;
     this.jobs = [];
     clearInterval(this.monitorTimer);
+    this.console.stop();
     if (this.server) {
       this.server.close();
       this.server.closeAllConnections?.();
@@ -99,7 +105,12 @@ class ServerEngine extends Engine {
   }
 
   actions() {
-    return [{ id: 'update', label: 'Update Now' }, { id: 'restart', label: 'Restart ETS2' }];
+    return [
+      { id: 'update', label: 'Update Now' },
+      { id: 'start', label: 'Start ETS2' },
+      { id: 'stop', label: 'Stop ETS2' },
+      { id: 'restart', label: 'Restart ETS2' },
+    ];
   }
 
   snapshot() {
@@ -112,13 +123,14 @@ class ServerEngine extends Engine {
         port: this.s.webhook_port,
         webhookPath: WEBHOOK_PATH,
         queued: this.jobs.length,
+        consoleFile: this.consoleFile,
       },
     };
   }
 
   runAction(id) {
     if (id === 'update') this.enqueue({ kind: 'manual' });
-    if (id === 'restart') this.enqueue({ kind: 'restart' });
+    if (['start', 'stop', 'restart'].includes(id)) this.enqueue({ kind: id });
   }
 
   lastUpdateText() {
@@ -333,6 +345,7 @@ class ServerEngine extends Engine {
     await sleep(500);
     if (spawnError) throw new UpdateError(`cannot start ETS2: ${spawnError.message}`);
     log.info(`Started ETS2 (pid ${child.pid})`);
+    this.console.rewind();
 
     const deadline = Date.now() + Number(this.s.startup_check_seconds) * 1000;
     while (Date.now() < deadline) {
@@ -363,6 +376,7 @@ class ServerEngine extends Engine {
     try {
       const running = (await this.findEts2()).length > 0;
       if (force || running !== this.ets2Running) {
+        if (running && !this.ets2Running) this.console.rewind(); // started outside this app
         this.ets2Running = running;
         this.emit('change');
       }
@@ -475,6 +489,12 @@ class ServerEngine extends Engine {
           this.setStatus('Restarting ETS2...', 'busy');
           await this.restartEts2();
           this.notify('ETS2 restarted');
+        } else if (job.kind === 'start') {
+          this.setStatus('Starting ETS2...', 'busy');
+          if (!(await this.startEts2())) throw new UpdateError('ETS2 exited right after start');
+        } else if (job.kind === 'stop') {
+          this.setStatus('Stopping ETS2...', 'busy');
+          await this.stopEts2();
         } else {
           let sha = job.sha;
           if (job.kind === 'manual') {
