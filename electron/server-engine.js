@@ -1,4 +1,4 @@
-// Server mode: receive GitHub push webhooks and install the new packages on the ETS2 server
+// Server mode: receive GitHub push webhooks and install the new packages on the dedicated server of the game
 // (download -> verify -> stop -> backup -> replace -> start, with rollback).
 const crypto = require('crypto');
 const fs = require('fs');
@@ -8,13 +8,14 @@ const { spawn } = require('child_process');
 const { Engine, run, parseRepository, sleep } = require('./engine');
 const { LogTail } = require('./log-tail');
 const log = require('./logger');
+const { t, LocalizedError, errorText } = require('./i18n');
 
 const GITHUB_API = 'https://api.github.com';
 const WEBHOOK_PATH = '/github-webhook';
 const MAX_PAYLOAD = 25 * 1024 * 1024;
 const ZERO_SHA = '0'.repeat(40);
 
-class UpdateError extends Error {
+class UpdateError extends LocalizedError {
   get name() { return 'UpdateError'; }
 }
 
@@ -42,8 +43,8 @@ async function retry(action, attempts = 10) {
 }
 
 class ServerEngine extends Engine {
-  constructor(settings, stateFile) {
-    super(settings);
+  constructor(settings, game, stateFile) {
+    super(settings, game);
     this.mode = 'server';
     this.stateFile = stateFile;
     this.branch = settings.branch;
@@ -51,8 +52,8 @@ class ServerEngine extends Engine {
       [settings.repo_sii_file, settings.sii_path],
       [settings.repo_dat_file, settings.dat_path],
     ]);
-    this.exe = settings.ets2_executable ? path.resolve(settings.ets2_executable) : '';
-    this.workdir = settings.ets2_working_directory || (this.exe && path.dirname(this.exe));
+    this.exe = settings.executable ? path.resolve(settings.executable) : '';
+    this.workdir = settings.working_directory || (this.exe && path.dirname(this.exe));
     this.backupRoot = settings.backup_dir || path.join(path.dirname(settings.sii_path || '.'), 'backups');
     this.secret = settings.webhook_secret || '';
     this.consoleFile = settings.server_log_path || path.join(path.dirname(settings.sii_path || '.'), 'server.log.txt');
@@ -63,7 +64,7 @@ class ServerEngine extends Engine {
     this.pending = new Set();
     this.running = false;
     this.stopped = false;
-    this.ets2Running = false;
+    this.serverRunning = false;
     this.server = null;
     this.monitorTimer = null;
   }
@@ -72,15 +73,15 @@ class ServerEngine extends Engine {
 
   async start() {
     ({ owner: this.owner, repo: this.repo } = parseRepository(this.s.repository));
-    if (!this.secret) throw new Error('Webhook secret not set');
-    for (const [key, name] of [['sii_path', 'SII file'], ['dat_path', 'DAT file'], ['ets2_executable', 'ETS2 executable']]) {
-      if (!this.s[key]) throw new Error(`${name} path not set`);
+    if (!this.secret) throw new LocalizedError('err.secretNotSet');
+    for (const [key, message] of [['sii_path', 'err.siiNotSet'], ['dat_path', 'err.datNotSet'], ['executable', 'err.exeNotSet']]) {
+      if (!this.s[key]) throw new LocalizedError(message);
     }
     await this.startWebhook();
     this.console.start();
-    this.setStatus('Idle', 'ok');
-    this.refreshEts2State(true);
-    this.monitorTimer = setInterval(() => this.refreshEts2State(), 15_000);
+    this.setStatus('status.idle', 'ok');
+    this.refreshServerState(true);
+    this.monitorTimer = setInterval(() => this.refreshServerState(), 15_000);
   }
 
   stop() {
@@ -97,19 +98,19 @@ class ServerEngine extends Engine {
 
   infoLines() {
     return [
-      `Status: ${this.status}`,
-      `ETS2: ${this.ets2Running ? 'running' : 'stopped'}`,
-      `Last update: ${this.lastUpdateText()}`,
-      `Webhook: port ${this.s.webhook_port} ${WEBHOOK_PATH}`,
+      t('tray.status', { status: this.status }),
+      t(this.serverRunning ? 'tray.gameRunning' : 'tray.gameStopped', { game: this.game.name }),
+      t('tray.lastUpdate', { value: this.lastUpdateText() }),
+      t('tray.webhook', { port: this.s.webhook_port, path: WEBHOOK_PATH }),
     ];
   }
 
   actions() {
     return [
-      { id: 'update', label: 'Update Now' },
-      { id: 'start', label: 'Start ETS2' },
-      { id: 'stop', label: 'Stop ETS2' },
-      { id: 'restart', label: 'Restart ETS2' },
+      { id: 'update', label: t('action.update') },
+      { id: 'start', label: t('action.start', { game: this.game.name }) },
+      { id: 'stop', label: t('action.stop', { game: this.game.name }) },
+      { id: 'restart', label: t('action.restart', { game: this.game.name }) },
     ];
   }
 
@@ -117,7 +118,7 @@ class ServerEngine extends Engine {
     return {
       ...super.snapshot(),
       details: {
-        ets2Running: this.ets2Running,
+        serverRunning: this.serverRunning,
         lastCommit: this.history.last_commit || '',
         lastUpdate: this.history.last_update || '',
         port: this.s.webhook_port,
@@ -134,7 +135,7 @@ class ServerEngine extends Engine {
   }
 
   lastUpdateText() {
-    if (!this.history.last_commit) return 'never';
+    if (!this.history.last_commit) return t('tray.never');
     return `${this.history.last_update} (${this.history.last_commit.slice(0, 7)})`;
   }
 
@@ -186,11 +187,11 @@ class ServerEngine extends Engine {
 
   enqueueCommit(sha) {
     if (this.pending.has(sha) || (this.history.processed || []).includes(sha)) {
-      log.info(`Commit ${sha.slice(0, 7)} already processed or queued, skipping`);
+      this.log.info(`Commit ${sha.slice(0, 7)} already processed or queued, skipping`);
       return false;
     }
     this.pending.add(sha);
-    log.info(`Queued commit ${sha.slice(0, 7)}`);
+    this.log.info(`Queued commit ${sha.slice(0, 7)}`);
     this.enqueue({ kind: 'webhook', sha });
     return true;
   }
@@ -221,21 +222,21 @@ class ServerEngine extends Engine {
         const body = Buffer.concat(chunks);
         const ip = req.socket.remoteAddress;
         if (!this.verifySignature(body, req.headers['x-hub-signature-256'])) {
-          log.warn(`Rejected webhook from ${ip}: invalid signature`);
+          this.log.warn(`Rejected webhook from ${ip}: invalid signature`);
           return reply(401, 'invalid signature');
         }
         const event = req.headers['x-github-event'] || '';
         const [code, message] = this.handleEvent(event, body);
-        log.info(`Webhook ${event} from ${ip} -> ${code} ${message}`);
+        this.log.info(`Webhook ${event} from ${ip} -> ${code} ${message}`);
         reply(code, message);
       });
     });
 
     return new Promise((resolve, reject) => {
-      this.server.once('error', (err) => reject(new Error(
-        err.code === 'EADDRINUSE' ? `port ${this.s.webhook_port} is already in use` : err.message)));
+      this.server.once('error', (err) => reject(
+        err.code === 'EADDRINUSE' ? new LocalizedError('err.portInUse', { port: this.s.webhook_port }) : err));
       this.server.listen(Number(this.s.webhook_port), this.s.webhook_host, () => {
-        log.info(`Server mode, webhook listening on ${this.s.webhook_host}:${this.s.webhook_port}${WEBHOOK_PATH}`);
+        this.log.info(`Server mode, webhook listening on ${this.s.webhook_host}:${this.s.webhook_port}${WEBHOOK_PATH}`);
         resolve();
       });
     });
@@ -256,8 +257,8 @@ class ServerEngine extends Engine {
       } catch {
         // not JSON: keep the text
       }
-      const hint = response.status === 404 ? ' (check repository URL, branch, file names and the token for private repositories)' : '';
-      throw new UpdateError(`GitHub API ${response.status} on ${apiPath}: ${detail}${hint}`);
+      throw new UpdateError(response.status === 404 ? 'err.githubApi404' : 'err.githubApi',
+        { status: response.status, path: apiPath, detail });
     }
     return response;
   }
@@ -273,22 +274,22 @@ class ServerEngine extends Engine {
     for (const repoFile of this.targets.keys()) {
       const apiPath = `contents/${repoFile.split('/').map(encodeURIComponent).join('/')}`;
       const meta = await (await this.apiGet(apiPath, undefined, { ref: sha })).json();
-      if (meta.type !== 'file') throw new UpdateError(`${repoFile} is not a file in commit ${sha.slice(0, 7)}`);
+      if (meta.type !== 'file') throw new UpdateError('err.notAFile', { file: repoFile, sha: sha.slice(0, 7) });
       const data = Buffer.from(await (await this.apiGet(apiPath, 'application/vnd.github.raw', { ref: sha })).arrayBuffer());
-      if (!data.length) throw new UpdateError(`${repoFile} is empty in commit ${sha.slice(0, 7)}`);
+      if (!data.length) throw new UpdateError('err.emptyFile', { file: repoFile, sha: sha.slice(0, 7) });
       if (data.length !== meta.size || gitBlobSha(data) !== meta.sha) {
-        throw new UpdateError(`${repoFile}: downloaded content does not match the repository (size/hash)`);
+        throw new UpdateError('err.mismatch', { file: repoFile });
       }
       files.set(repoFile, data);
-      log.info(`Downloaded ${repoFile} (${data.length} bytes, blob ${meta.sha.slice(0, 7)})`);
+      this.log.info(`Downloaded ${repoFile} (${data.length} bytes, blob ${meta.sha.slice(0, 7)})`);
     }
     return files;
   }
 
-  // ------------------------------------------------------------------ ETS2 process
+  // ------------------------------------------------------------------ dedicated server process
 
-  /** PIDs of running processes whose executable is the configured ETS2 server. */
-  async findEts2() {
+  /** PIDs of running processes whose executable is the configured dedicated server. */
+  async findServer() {
     if (!this.exe) return [];
     const name = path.basename(this.exe).replace(/'/g, "''");
     const script = `Get-CimInstance Win32_Process -Filter 'Name = "${name}"' | ` +
@@ -302,37 +303,37 @@ class ServerEngine extends Engine {
       .map((p) => p.ProcessId);
   }
 
-  async stopEts2() {
-    const pids = await this.findEts2();
+  async stopServer() {
+    const pids = await this.findServer();
     if (!pids.length) {
-      log.info('ETS2 is not running');
+      this.log.info(`${this.game.name} is not running`);
       return false;
     }
-    log.info(`Stopping ETS2 (pid ${pids.join(', ')})`);
+    this.log.info(`Stopping ${this.game.name} (pid ${pids.join(', ')})`);
     for (const pid of pids) {
       try {
         process.kill(pid);
       } catch (err) {
-        if (err.code !== 'ESRCH') log.warn(`Cannot stop pid ${pid}: ${err.message}`);
+        if (err.code !== 'ESRCH') this.log.warn(`Cannot stop pid ${pid}: ${err.message}`);
       }
     }
     const deadline = Date.now() + Number(this.s.stop_timeout_seconds) * 1000;
-    while ((await this.findEts2()).length) {
-      if (Date.now() > deadline) throw new UpdateError('unable to stop ETS2');
+    while ((await this.findServer()).length) {
+      if (Date.now() > deadline) throw new UpdateError('err.cannotStopGame', { game: this.game.name });
       await sleep(1000);
     }
     await sleep(2000); // give Windows time to release file handles
     return true;
   }
 
-  /** Start ETS2 and check that it stays up. Returns false if it exits during the check. */
-  async startEts2() {
-    if ((await this.findEts2()).length) {
-      log.info('ETS2 already running');
+  /** Start the server and check that it stays up. Returns false if it exits during the check. */
+  async startServer() {
+    if ((await this.findServer()).length) {
+      this.log.info(`${this.game.name} already running`);
       return true;
     }
-    if (!fs.existsSync(this.exe)) throw new UpdateError(`ETS2 executable not found: ${this.exe}`);
-    const child = spawn(this.exe, splitArgs(this.s.ets2_arguments), {
+    if (!fs.existsSync(this.exe)) throw new UpdateError('err.exeNotFound', { game: this.game.name, path: this.exe });
+    const child = spawn(this.exe, splitArgs(this.s.arguments), {
       cwd: this.workdir,
       detached: true, // own console window, keeps running if this app exits
       stdio: 'ignore',
@@ -343,14 +344,14 @@ class ServerEngine extends Engine {
     child.on('error', (err) => { spawnError = err; });
     child.unref();
     await sleep(500);
-    if (spawnError) throw new UpdateError(`cannot start ETS2: ${spawnError.message}`);
-    log.info(`Started ETS2 (pid ${child.pid})`);
+    if (spawnError) throw new UpdateError('err.cannotStartGame', { game: this.game.name, message: spawnError.message });
+    this.log.info(`Started ${this.game.name} (pid ${child.pid})`);
     this.console.rewind();
 
     const deadline = Date.now() + Number(this.s.startup_check_seconds) * 1000;
     while (Date.now() < deadline) {
       if (exitCode !== null) {
-        log.error(`ETS2 exited during startup with code ${exitCode}`);
+        this.log.error(`${this.game.name} exited during startup with code ${exitCode}`);
         return false;
       }
       await sleep(500);
@@ -359,29 +360,29 @@ class ServerEngine extends Engine {
   }
 
   /** Best effort start used on error paths: never leave the server down. */
-  async ensureEts2Running() {
+  async ensureServerRunning() {
     try {
-      if (!(await this.startEts2())) log.error('ETS2 failed to start');
+      if (!(await this.startServer())) this.log.error(`${this.game.name} failed to start`);
     } catch (err) {
-      log.error('Unable to start ETS2', err);
+      this.log.error(`Unable to start ${this.game.name}`, err);
     }
   }
 
-  async restartEts2() {
-    await this.stopEts2();
-    if (!(await this.startEts2())) throw new UpdateError('ETS2 exited right after start');
+  async restartServer() {
+    await this.stopServer();
+    if (!(await this.startServer())) throw new UpdateError('err.exitedAfterStart', { game: this.game.name });
   }
 
-  async refreshEts2State(force = false) {
+  async refreshServerState(force = false) {
     try {
-      const running = (await this.findEts2()).length > 0;
-      if (force || running !== this.ets2Running) {
-        if (running && !this.ets2Running) this.console.rewind(); // started outside this app
-        this.ets2Running = running;
+      const running = (await this.findServer()).length > 0;
+      if (force || running !== this.serverRunning) {
+        if (running && !this.serverRunning) this.console.rewind(); // started outside this app
+        this.serverRunning = running;
         this.emit('change');
       }
     } catch (err) {
-      log.error('Cannot check the ETS2 process', err);
+      this.log.error(`Cannot check the ${this.game.name} process`, err);
     }
   }
 
@@ -396,7 +397,7 @@ class ServerEngine extends Engine {
     for (const dest of this.targets.values()) {
       if (fs.existsSync(dest)) fs.copyFileSync(dest, path.join(folder, path.basename(dest)));
     }
-    log.info(`Backup created: ${folder}`);
+    this.log.info(`Backup created: ${folder}`);
 
     const backups = fs.readdirSync(this.backupRoot, { withFileTypes: true })
       .filter((d) => d.isDirectory()).map((d) => d.name).sort();
@@ -411,7 +412,7 @@ class ServerEngine extends Engine {
       const src = path.join(folder, path.basename(dest));
       if (fs.existsSync(src)) await retry(() => fs.copyFileSync(src, dest));
     }
-    log.warn(`Previous files restored from ${folder}`);
+    this.log.warn(`Previous files restored from ${folder}`);
   }
 
   /** Write the new files next to the destination (same volume -> atomic rename). */
@@ -422,7 +423,7 @@ class ServerEngine extends Engine {
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       const tmp = `${dest}.new`;
       fs.writeFileSync(tmp, data);
-      if (!fs.readFileSync(tmp).equals(data)) throw new UpdateError(`verification of staged file ${tmp} failed`);
+      if (!fs.readFileSync(tmp).equals(data)) throw new UpdateError('err.stagedCheck', { file: tmp });
       staged.set(dest, tmp);
     }
     return staged;
@@ -432,11 +433,11 @@ class ServerEngine extends Engine {
 
   async applyUpdate(sha) {
     const short = sha.slice(0, 7);
-    this.setStatus(`Downloading ${short}...`, 'busy');
-    const files = await this.download(sha); // any failure here leaves ETS2 untouched
+    this.setStatus('status.downloading', 'busy', { sha: short });
+    const files = await this.download(sha); // any failure here leaves the server untouched
 
     if ([...files].every(([repoFile, data]) => fileSha256(this.targets.get(repoFile)) === sha256(data))) {
-      log.info(`Commit ${short}: packages already up to date, no restart needed`);
+      this.log.info(`Commit ${short}: packages already up to date, no restart needed`);
       this.markProcessed(sha, true);
       return;
     }
@@ -444,33 +445,33 @@ class ServerEngine extends Engine {
     const staged = this.stage(files);
     let backup = null;
     try {
-      this.setStatus(`Installing ${short}...`, 'busy');
-      await this.stopEts2();
+      this.setStatus('status.installing', 'busy', { sha: short });
+      await this.stopServer();
       backup = this.backupCurrent(short);
       for (const [dest, tmp] of staged) {
         await retry(() => fs.renameSync(tmp, dest));
-        log.info(`Installed ${dest}`);
+        this.log.info(`Installed ${dest}`);
       }
     } catch (err) {
-      log.error(`Install of ${short} failed`, err);
+      this.log.error(`Install of ${short} failed`, err);
       if (backup) await this.restore(backup);
-      await this.ensureEts2Running();
+      await this.ensureServerRunning();
       throw err;
     } finally {
       for (const tmp of staged.values()) fs.rmSync(tmp, { force: true });
     }
 
-    this.setStatus('Starting ETS2...', 'busy');
-    if (!(await this.startEts2())) {
+    this.setStatus('status.startingGame', 'busy');
+    if (!(await this.startServer())) {
       await this.restore(backup);
       this.markProcessed(sha, false); // don't retry a broken commit automatically
-      await this.ensureEts2Running();
-      throw new UpdateError(`ETS2 did not start with commit ${short}: previous files restored`);
+      await this.ensureServerRunning();
+      throw new UpdateError('err.rolledBack', { game: this.game.name, sha: short });
     }
 
     this.markProcessed(sha, true);
-    log.info(`Update to ${short} completed`);
-    this.notify(`ETS2 updated to commit ${short}`);
+    this.log.info(`Update to ${short} completed`);
+    this.notify(t('notify.gameUpdated', { game: this.game.name, sha: short }));
   }
 
   enqueue(job) {
@@ -486,33 +487,33 @@ class ServerEngine extends Engine {
       this.busy = true;
       try {
         if (job.kind === 'restart') {
-          this.setStatus('Restarting ETS2...', 'busy');
-          await this.restartEts2();
-          this.notify('ETS2 restarted');
+          this.setStatus('status.restartingGame', 'busy');
+          await this.restartServer();
+          this.notify(t('notify.gameRestarted', { game: this.game.name }));
         } else if (job.kind === 'start') {
-          this.setStatus('Starting ETS2...', 'busy');
-          if (!(await this.startEts2())) throw new UpdateError('ETS2 exited right after start');
+          this.setStatus('status.startingGame', 'busy');
+          if (!(await this.startServer())) throw new UpdateError('err.exitedAfterStart', { game: this.game.name });
         } else if (job.kind === 'stop') {
-          this.setStatus('Stopping ETS2...', 'busy');
-          await this.stopEts2();
+          this.setStatus('status.stoppingGame', 'busy');
+          await this.stopServer();
         } else {
           let sha = job.sha;
           if (job.kind === 'manual') {
-            this.setStatus('Checking GitHub...', 'busy');
+            this.setStatus('status.checkingGithub', 'busy');
             sha = await this.latestCommit();
-            log.info(`Manual update: latest commit on ${this.branch} is ${sha.slice(0, 7)}`);
+            this.log.info(`Manual update: latest commit on ${this.branch} is ${sha.slice(0, 7)}`);
           }
           await this.applyUpdate(sha);
         }
-        this.setStatus('Idle', 'ok');
+        this.setStatus('status.idle', 'ok');
       } catch (err) {
-        log.error(`${job.kind} job failed`, err);
-        this.setStatus(`Error: ${err.message}`, 'error');
-        this.notify(`Update failed: ${err.message}`);
+        this.log.error(`${job.kind} job failed`, err);
+        this.setError(err);
+        this.notify(t('notify.updateFailed', { message: errorText(err) }));
       } finally {
         this.busy = false;
         if (job.kind === 'webhook') this.pending.delete(job.sha);
-        await this.refreshEts2State(true);
+        await this.refreshServerState(true);
       }
     }
     this.running = false;

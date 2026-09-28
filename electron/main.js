@@ -1,13 +1,17 @@
-// ETS2 Package Sync - Electron main process: tray icon, dashboard window, client/server engine.
+// ETS2 Package Sync - Electron main process: tray icon, dashboard window, one client/server engine per game.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { app, BrowserWindow, Menu, Notification, Tray, dialog, ipcMain, nativeImage, nativeTheme, shell } = require('electron');
 const log = require('./logger');
-const { DEFAULTS, loadSettings, saveSettings, validateSettings, buildExport, parseImport } = require('./settings');
+const { normalize, activeGames, loadSettings, saveSettings, validateSettings, buildExport, parseImport } = require('./settings');
 const { ClientEngine } = require('./client-engine');
 const { ServerEngine } = require('./server-engine');
+const { GAMES, GAME_IDS } = require('./games');
 const { Updater } = require('./updater');
+const i18n = require('./i18n');
+
+const { t } = i18n;
 
 const APP_NAME = 'ETS2 Package Sync';
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
@@ -17,60 +21,71 @@ const ICON_DIR = app.isPackaged ? path.join(process.resourcesPath, 'icons') : pa
 
 let tray = null;
 let win = null;
-let engine = null;
+const engines = {}; // game id -> running engine (only for the games in use)
 let settings = null;
 let quitting = false;
 let updater = null;
 
 // ------------------------------------------------------------------ engine
 
+const send = (channel, value) => win && !win.isDestroyed() && win.webContents.send(channel, value);
+
+const runningGames = () => GAME_IDS.filter((id) => engines[id]);
+
+const anyBusy = () => runningGames().some((id) => engines[id].busy);
+
+/** { state, busy, games: { ets2: snapshot | null, ats: ... } }: state is the worst of the games (tray icon). */
 function snapshot() {
-  if (engine) return engine.snapshot();
-  return { mode: '', status: 'Not configured', state: 'idle', busy: false, details: {} };
+  const games = Object.fromEntries(GAME_IDS.map((id) => [id, engines[id] ? engines[id].snapshot() : null]));
+  const active = Object.values(games).filter(Boolean);
+  const state = ['error', 'busy', 'ok'].find((s) => active.some((g) => g.state === s)) || 'idle';
+  return { state, busy: active.some((g) => g.busy), games };
 }
 
 function broadcastState() {
   updateTray();
-  if (win && !win.isDestroyed()) win.webContents.send('state', snapshot());
+  send('state', snapshot());
 }
 
-async function startEngine() {
-  if (!['client', 'server'].includes(settings.mode)) {
-    engine = null;
-    broadcastState();
-    return;
-  }
-  engine = settings.mode === 'client'
-    ? new ClientEngine(settings)
-    : new ServerEngine(settings, path.join(app.getPath('userData'), 'server_state.json'));
+async function startEngine(id) {
+  const game = GAMES[id];
+  const s = settings.games[id];
+  // ETS2 keeps the file name of the versions that managed only one game
+  const stateFile = path.join(app.getPath('userData'), id === 'ets2' ? 'server_state.json' : `server_state_${id}.json`);
+  const engine = s.mode === 'client' ? new ClientEngine(s, game) : new ServerEngine(s, game, stateFile);
+  engines[id] = engine;
   engine.on('change', broadcastState);
-  engine.on('notify', notify);
-  engine.on('console', (update) => {
-    if (win && !win.isDestroyed()) win.webContents.send('console', update);
-  });
+  engine.on('notify', (body) => notify(body, undefined, game));
+  engine.on('console', (update) => send('console', { game: id, ...update }));
   try {
     await engine.start();
   } catch (err) {
-    log.error(`Cannot start ${settings.mode} mode`, err);
+    engine.log.error(`Cannot start ${s.mode} mode`, err);
     engine.stop();
-    engine.setStatus(`Error: ${err.message}`, 'error');
-    notify(`Cannot start: ${err.message}`);
+    engine.setError(err);
+    notify(t('notify.cannotStart', { message: i18n.errorText(err) }), undefined, game);
   }
+}
+
+async function startEngines() {
+  await Promise.all(activeGames(settings).map(startEngine));
   broadcastState();
 }
 
-function stopEngine() {
-  if (engine) {
-    engine.removeAllListeners();
-    engine.stop();
-    engine = null;
+function stopEngines() {
+  for (const id of runningGames()) {
+    engines[id].removeAllListeners();
+    engines[id].stop();
+    delete engines[id];
   }
 }
 
-function runAction(id) {
+function runAction(game, id) {
+  const engine = engines[game];
   if (!engine) return;
   if (id === 'open-repo') {
-    if (/^https:\/\//i.test(settings.repository)) shell.openExternal(settings.repository);
+    const { repository } = settings.games[game];
+    if (/^https:\/\//i.test(repository)) shell.openExternal(repository);
     return;
   }
   engine.runAction(id);
@@ -82,25 +97,38 @@ function trayImage(state) {
   return nativeImage.createFromPath(path.join(ICON_DIR, `tray-${state}.png`));
 }
 
+const gameIcon = (id) => nativeImage.createFromPath(path.join(ICON_DIR, GAMES[id].icon)).resize({ width: 16, height: 16 });
+
+/** Tray menu of the games: flat with one game, one submenu per game with two. */
+function gamesMenu() {
+  const games = runningGames();
+  if (!games.length) return [{ label: t('tray.status', { status: t('status.notConfigured') }), enabled: false }, { type: 'separator' }];
+  const title = (id) => ({ label: `${GAMES[id].name} - ${t(`mode.${engines[id].mode}`)}`, icon: gameIcon(id) });
+  const items = (id) => [
+    ...engines[id].infoLines().map((line) => ({ label: line, enabled: false })),
+    { type: 'separator' },
+    ...engines[id].actions().map((a) => ({ label: a.label, click: () => runAction(id, a.id) })),
+  ];
+  if (games.length === 1) return [{ ...title(games[0]), enabled: false }, ...items(games[0]), { type: 'separator' }];
+  return [...games.map((id) => ({ ...title(id), submenu: items(id) })), { type: 'separator' }];
+}
+
 function updateTray() {
   if (!tray) return;
-  const snap = snapshot();
-  tray.setImage(trayImage(snap.state));
-  tray.setToolTip(`${APP_NAME}${snap.mode ? ` (${snap.mode})` : ''}\n${snap.status}`.slice(0, 127));
+  tray.setImage(trayImage(snapshot().state));
+  const lines = runningGames().map((id) => `${GAMES[id].name}: ${engines[id].status}`);
+  tray.setToolTip([APP_NAME, ...(lines.length ? lines : [t('status.notConfigured')])].join('\n').slice(0, 127));
 
-  const info = engine ? engine.infoLines() : ['Status: not configured'];
   const template = [
-    { label: snap.mode ? `${APP_NAME} - ${snap.mode[0].toUpperCase()}${snap.mode.slice(1)}` : APP_NAME, enabled: false },
-    ...info.map((line) => ({ label: line, enabled: false })),
+    { label: APP_NAME, enabled: false },
     { type: 'separator' },
-    ...(engine ? engine.actions().map((a) => ({ label: a.label, click: () => runAction(a.id) })) : []),
-    ...(engine ? [{ type: 'separator' }] : []),
-    { label: 'Open Dashboard', click: () => showWindow('dashboard') },
-    { label: 'Settings', click: () => showWindow('settings') },
-    { label: 'Logs', click: () => showWindow('logs') },
+    ...gamesMenu(),
+    { label: t('tray.openDashboard'), click: () => showWindow('dashboard') },
+    { label: t('tray.settings'), click: () => showWindow('settings') },
+    { label: t('tray.logs'), click: () => showWindow('logs') },
     { type: 'separator' },
     ...updateMenu(),
-    { label: 'Exit', click: () => app.quit() },
+    { label: t('tray.exit'), click: () => app.quit() },
   ];
   tray.setContextMenu(Menu.buildFromTemplate(template));
 }
@@ -108,25 +136,30 @@ function updateTray() {
 function updateMenu() {
   const u = updater && updater.state;
   if (!u) return [];
-  if (u.status === 'downloaded') return [{ label: `Restart to update (${u.latest})`, click: installUpdate }];
-  if (u.status === 'available') return [{ label: `Update available: ${u.latest}`, click: () => showWindow() }];
-  return [{ label: 'Check for updates', enabled: u.status !== 'checking', click: () => updater.check(true) }];
+  if (u.status === 'downloaded') return [{ label: t('tray.restartToUpdate', { version: u.latest }), click: installUpdate }];
+  if (u.status === 'available') return [{ label: t('tray.updateAvailable', { version: u.latest }), click: () => showWindow() }];
+  return [{ label: t('tray.checkUpdates'), enabled: u.status !== 'checking', click: () => updater.check(true) }];
 }
 
-/** Install a downloaded update, unless an update of ETS2 is running. */
+/** Install a downloaded update, unless an operation of a game (e.g. a server update) is running. */
 function installUpdate() {
-  if (engine && engine.busy) {
-    notify('An operation is in progress: the app will update when you restart it after it has finished');
-    return { ok: false, error: 'An operation is in progress. Try again when it has finished.' };
+  if (anyBusy()) {
+    notify(t('notify.busyUpdate'));
+    return { ok: false, error: t('err.busyInstall') };
   }
   quitting = true; // skip the tray-only close and the busy check of before-quit
   if (!updater.install()) quitting = false;
   return { ok: quitting };
 }
 
-function notify(body, onClick) {
+/** game: entry of games.js for the notifications of a game (its name in the title, its icon). */
+function notify(body, onClick, game) {
   if (Notification.isSupported()) {
-    const notification = new Notification({ title: APP_NAME, body: String(body).slice(0, 250), icon: path.join(ICON_DIR, 'icon.png') });
+    const notification = new Notification({
+      title: game ? `${APP_NAME} - ${game.name}` : APP_NAME,
+      body: String(body).slice(0, 250),
+      icon: path.join(ICON_DIR, game ? game.icon : 'icon.png'),
+    });
     if (onClick) notification.on('click', onClick);
     notification.show();
   }
@@ -139,6 +172,17 @@ const windowBackground = () => (nativeTheme.shouldUseDarkColors ? '#020617' : '#
 /** 'system' | 'light' | 'dark': also drives prefers-color-scheme in the UI and the native dialogs. */
 function applyTheme(theme) {
   nativeTheme.themeSource = ['light', 'dark'].includes(theme) ? theme : 'system';
+}
+
+// ------------------------------------------------------------------ language
+
+const systemLocales = () => [...(app.getPreferredSystemLanguages?.() || []), app.getLocale()];
+
+/** 'system' | 'en' | 'it': sets the language of tray, notifications, dialogs and status, and refreshes them. */
+function applyLanguage(preference) {
+  i18n.setLanguage(i18n.resolveLanguage(preference, systemLocales()));
+  broadcastState();
+  if (updater) send('update', updater.view());
 }
 
 // ------------------------------------------------------------------ window
@@ -208,16 +252,17 @@ async function publicIp() {
 function registerIpc() {
   ipcMain.handle('get-state', () => ({
     settings,
-    configured: Boolean(settings.mode),
+    configured: activeGames(settings).length > 0,
     autostart: app.getLoginItemSettings(LOGIN_ITEM).openAtLogin,
     autostartBlocked: app.isPackaged && app.getLoginItemSettings(LOGIN_ITEM).openAtLogin &&
       !app.getLoginItemSettings(LOGIN_ITEM).executableWillLaunchAtLogin,
     canAutostart: app.isPackaged,
     snapshot: snapshot(),
     version: app.getVersion(),
+    locale: i18n.getLanguage(),
     localIps: localIps(),
     logs: log.lines,
-    console: engine && engine.console ? engine.console.lines : [],
+    console: Object.fromEntries(runningGames().filter((id) => engines[id].console).map((id) => [id, engines[id].console.lines])),
   }));
 
   ipcMain.handle('set-theme', (_event, theme) => {
@@ -227,24 +272,31 @@ function registerIpc() {
     return settings.theme;
   });
 
+  ipcMain.handle('set-language', (_event, language) => {
+    settings.language = i18n.LANGUAGES.includes(language) ? language : 'system';
+    applyLanguage(settings.language);
+    saveSettings(settings);
+    return i18n.getLanguage();
+  });
+
   ipcMain.handle('save-settings', async (_event, values, autostart) => {
-    // the theme is saved on its own (sidebar switch): never overwrite it with a stale form value
-    const next = { ...DEFAULTS, ...settings, ...values, theme: settings.theme };
+    // theme and language are saved on their own (instant switches): never overwrite them with stale form values
+    const next = normalize({ games: values.games, theme: settings.theme, language: settings.language });
     const errors = validateSettings(next);
     if (errors.length) return { ok: false, errors };
-    if (engine && engine.busy) return { ok: false, errors: ['An operation is in progress. Try again in a moment.'] };
+    if (anyBusy()) return { ok: false, errors: [t('err.busySave')] };
 
     settings = next;
     saveSettings(settings);
     if (app.isPackaged) app.setLoginItemSettings({ ...LOGIN_ITEM, openAtLogin: Boolean(autostart) });
-    stopEngine();
-    await startEngine();
+    stopEngines();
+    await startEngines();
     return { ok: true, snapshot: snapshot() };
   });
 
-  ipcMain.handle('run-action', (_event, id) => runAction(id));
+  ipcMain.handle('run-action', (_event, game, id) => runAction(game, id));
   ipcMain.handle('public-ip', () => publicIp());
-  ipcMain.handle('update-state', () => updater.state);
+  ipcMain.handle('update-state', () => updater.view());
   ipcMain.handle('update-check', () => updater.check(true));
   ipcMain.handle('update-download', () => updater.download());
   ipcMain.handle('update-install', () => installUpdate());
@@ -252,12 +304,15 @@ function registerIpc() {
     if (/^https:\/\//i.test(String(url))) shell.openExternal(String(url)); // links of the Guide page
   });
   ipcMain.handle('open-log-file', () => log.file && shell.openPath(log.file));
-  ipcMain.handle('open-console-file', () => engine && engine.consoleFile && shell.openPath(engine.consoleFile));
+  ipcMain.handle('open-console-file', (_event, game) => {
+    const engine = engines[game];
+    if (engine && engine.consoleFile) shell.openPath(engine.consoleFile);
+  });
 
   ipcMain.handle('browse', async (_event, kind, current) => {
     const filters = kind === 'exe'
-      ? [{ name: 'Executable', extensions: ['exe'] }]
-      : [{ name: 'All files', extensions: ['*'] }];
+      ? [{ name: t('dialog.filterExe'), extensions: ['exe'] }]
+      : [{ name: t('dialog.filterAll'), extensions: ['*'] }];
     const result = await dialog.showOpenDialog(win, {
       defaultPath: current || undefined,
       properties: [kind === 'dir' ? 'openDirectory' : 'openFile'],
@@ -267,16 +322,15 @@ function registerIpc() {
   });
 
   ipcMain.handle('export-settings', async (_event, values) => {
-    const hasSecrets = Boolean(values.webhook_secret || values.github_token);
+    const hasSecrets = GAME_IDS.some((id) => values.games?.[id]?.webhook_secret || values.games?.[id]?.github_token);
     let includeSecrets = false;
     if (hasSecrets) {
       const { response } = await dialog.showMessageBox(win, {
         type: 'question',
-        title: 'Export settings',
-        message: 'Include the webhook secret and the GitHub token?',
-        detail: 'In the file they are stored in clear text: anyone with the file can read them. ' +
-          'Include them only to move the configuration to another PC, and keep the file private.',
-        buttons: ['Without secrets', 'Include secrets', 'Cancel'],
+        title: t('dialog.exportTitle'),
+        message: t('dialog.secretsQuestion'),
+        detail: t('dialog.secretsDetail'),
+        buttons: [t('dialog.withoutSecrets'), t('dialog.includeSecrets'), t('dialog.cancel')],
         defaultId: 0,
         cancelId: 2,
         noLink: true,
@@ -285,15 +339,17 @@ function registerIpc() {
       includeSecrets = response === 1;
     }
     const result = await dialog.showSaveDialog(win, {
-      title: 'Export settings',
-      defaultPath: path.join(app.getPath('documents'), `ets2-package-sync-${values.mode || 'settings'}.json`),
-      filters: [{ name: 'Settings', extensions: ['json'] }],
+      title: t('dialog.exportTitle'),
+      // e.g. ets2-package-sync-ets2-server-ats-server.json
+      defaultPath: path.join(app.getPath('documents'), `ets2-package-sync-${
+        activeGames(normalize(values)).map((id) => `${id}-${values.games[id].mode}`).join('-') || 'settings'}.json`),
+      filters: [{ name: t('dialog.filterSettings'), extensions: ['json'] }],
     });
     if (result.canceled || !result.filePath) return { ok: false, canceled: true };
     try {
       fs.writeFileSync(result.filePath, buildExport(values, includeSecrets, app.getVersion()));
     } catch (err) {
-      return { ok: false, error: `Cannot write the file: ${err.message}` };
+      return { ok: false, error: t('err.writeFile', { message: err.message }) };
     }
     log.info(`Settings exported to ${result.filePath}${includeSecrets ? ' (with secrets)' : ''}`);
     return { ok: true, file: result.filePath, includeSecrets };
@@ -301,20 +357,20 @@ function registerIpc() {
 
   ipcMain.handle('import-settings', async () => {
     const result = await dialog.showOpenDialog(win, {
-      title: 'Import settings',
+      title: t('dialog.importTitle'),
       defaultPath: app.getPath('documents'),
       properties: ['openFile'],
-      filters: [{ name: 'Settings', extensions: ['json'] }],
+      filters: [{ name: t('dialog.filterSettings'), extensions: ['json'] }],
     });
     if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true };
     const file = result.filePaths[0];
     try {
-      if (fs.statSync(file).size > 1_000_000) throw new Error('The file is too big to be a settings file.');
+      if (fs.statSync(file).size > 1_000_000) throw new i18n.LocalizedError('err.fileTooBig');
       const parsed = parseImport(fs.readFileSync(file, 'utf8'));
       log.info(`Settings imported from ${file} (not saved yet)`);
       return { ok: true, file, ...parsed };
     } catch (err) {
-      return { ok: false, error: err.message };
+      return { ok: false, error: i18n.errorText(err) };
     }
   });
 
@@ -338,13 +394,13 @@ if (!app.requestSingleInstanceLock()) {
   if (app.isPackaged) app.setAppUserModelId('com.ets2.packagesync');
 
   app.on('before-quit', (event) => {
-    if (engine && engine.busy && !quitting) {
+    if (anyBusy() && !quitting) {
       event.preventDefault();
-      notify('An operation is in progress, try again when it has finished');
+      notify(t('notify.busyQuit'));
       return;
     }
     quitting = true;
-    stopEngine();
+    stopEngines();
   });
   app.on('window-all-closed', () => {}); // stay in the tray
 
@@ -353,16 +409,19 @@ if (!app.requestSingleInstanceLock()) {
     log.console = !app.isPackaged;
     log.info(`${APP_NAME} ${app.getVersion()} starting`);
 
-    settings = loadSettings() || { ...DEFAULTS };
-    if (!settings.ets2_documents_path) {
-      settings.ets2_documents_path = path.join(app.getPath('documents'), 'Euro Truck Simulator 2');
+    settings = loadSettings() || normalize();
+    for (const id of GAME_IDS) {
+      if (!settings.games[id].documents_path) {
+        settings.games[id].documents_path = path.join(app.getPath('documents'), GAMES[id].documentsFolder);
+      }
     }
     applyTheme(settings.theme);
+    i18n.setLanguage(i18n.resolveLanguage(settings.language, systemLocales()));
     nativeTheme.on('updated', () => win && !win.isDestroyed() && win.setBackgroundColor(windowBackground()));
     updater = new Updater();
     updater.on('change', (state) => {
       updateTray();
-      if (win && !win.isDestroyed()) win.webContents.send('update', state);
+      send('update', state);
     });
     updater.on('notify', (body) => notify(body, () => showWindow())); // click: open the app on the update banner
     registerIpc();
@@ -372,9 +431,9 @@ if (!app.requestSingleInstanceLock()) {
     updateTray();
 
     createWindow();
-    await startEngine();
+    await startEngines();
     updater.start();
-    if (!settings.mode) showWindow('settings');
+    if (!activeGames(settings).length) showWindow('settings');
     else if (!process.argv.includes('--hidden')) showWindow();
   });
 }

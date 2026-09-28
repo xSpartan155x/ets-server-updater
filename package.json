@@ -35,7 +35,9 @@
         "filter": [
           "tray-*.png",
           "icon.png",
-          "icon.ico"
+          "icon.ico",
+          "ets2.png",
+          "ats.png"
         ]
       }
     ],

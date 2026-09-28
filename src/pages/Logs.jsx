@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
 import { Button, PageHeader } from '../components/ui';
+import { useT } from '../i18n';
 
 const LEVEL_STYLES = {
   INFO: 'text-slate-500 dark:text-slate-400',
@@ -27,6 +28,7 @@ export function LogLine({ line, compact }) {
 }
 
 export default function Logs({ logs }) {
+  const t = useT();
   const [filter, setFilter] = useState('all');
   const [follow, setFollow] = useState(true);
   const bottom = useRef(null);
@@ -38,13 +40,13 @@ export default function Logs({ logs }) {
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader title="Logs" subtitle="Live activity of this session. The full history is in the log file.">
-        <Button icon={FileText} onClick={() => window.api.openLogFile()}>Open log file</Button>
+      <PageHeader title={t('logs.title')} subtitle={t('logs.subtitle')}>
+        <Button icon={FileText} onClick={() => window.api.openLogFile()}>{t('logs.openFile')}</Button>
       </PageHeader>
       <div className="flex min-h-0 flex-1 flex-col px-8 pb-8">
         <div className="mb-3 flex items-center justify-between">
           <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            {[['all', 'All'], ['warn', 'Warnings'], ['error', 'Errors']].map(([id, label]) => (
+            {['all', 'warn', 'error'].map((id) => (
               <button
                 key={id}
                 type="button"
@@ -55,18 +57,18 @@ export default function Logs({ logs }) {
                     : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
                 }`}
               >
-                {label}
+                {t(`logs.${id}`)}
               </button>
             ))}
           </div>
           <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
             <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} className="accent-orange-600" />
-            Follow new lines
+            {t('logs.follow')}
           </label>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-slate-200 bg-white py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
           {visible.length ? visible.map((line, i) => <LogLine key={i} line={line} />) : (
-            <p className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">Nothing to show.</p>
+            <p className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400">{t('logs.empty')}</p>
           )}
           <div ref={bottom} />
         </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Check, Copy, Eye, EyeOff, FolderOpen, Globe, Loader2 } from 'lucide-react';
+import { Trans, useT } from '../i18n';
 
 export const STATE_STYLES = {
   ok: {
@@ -124,6 +125,7 @@ export function NumberInput({ value, onChange, ...props }) {
 }
 
 export function PathInput({ value, onChange, kind, placeholder }) {
+  const t = useT();
   const browse = async () => {
     const picked = await window.api.browse(kind, value);
     if (picked) onChange(picked);
@@ -131,12 +133,13 @@ export function PathInput({ value, onChange, kind, placeholder }) {
   return (
     <div className="flex gap-2">
       <TextInput value={value} onChange={onChange} placeholder={placeholder} className="font-mono text-xs" />
-      <Button icon={FolderOpen} onClick={browse}>Browse</Button>
+      <Button icon={FolderOpen} onClick={browse}>{t('ui.browse')}</Button>
     </div>
   );
 }
 
 export function SecretInput({ value, onChange, placeholder, extra }) {
+  const t = useT();
   const [shown, setShown] = useState(false);
   return (
     <div className="flex gap-2">
@@ -154,7 +157,7 @@ export function SecretInput({ value, onChange, placeholder, extra }) {
           type="button"
           onClick={() => setShown(!shown)}
           className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
-          title={shown ? 'Hide' : 'Show'}
+          title={shown ? t('ui.hide') : t('ui.show')}
         >
           {shown ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
         </button>
@@ -165,6 +168,7 @@ export function SecretInput({ value, onChange, placeholder, extra }) {
 }
 
 export function CopyField({ value }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await navigator.clipboard.writeText(value);
@@ -175,7 +179,7 @@ export function CopyField({ value }) {
     <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 py-1 pr-1 pl-3 dark:border-slate-800 dark:bg-slate-950">
       <code className="selectable flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300">{value}</code>
       <Button variant="ghost" icon={copied ? Check : Copy} onClick={copy} className="px-2 py-1">
-        {copied ? 'Copied' : 'Copy'}
+        {copied ? t('ui.copied') : t('ui.copy')}
       </Button>
     </div>
   );
@@ -205,6 +209,7 @@ export function Toggle({ checked, onChange, label, description, disabled }) {
 let cachedPublicIp = null; // survives page switches
 
 export function WebhookUrl({ port, localIps = [] }) {
+  const t = useT();
   const [ip, setIp] = useState(cachedPublicIp);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -224,14 +229,21 @@ export function WebhookUrl({ port, localIps = [] }) {
     <div className="space-y-2">
       <div className="flex gap-2">
         <div className="min-w-0 flex-1">
-          <CopyField value={`http://${ip || 'YOUR_PUBLIC_IP'}:${port || 8787}/github-webhook`} />
+          <CopyField value={`http://${ip || t('webhook.ipPlaceholder')}:${port || 8787}/github-webhook`} />
         </div>
-        <Button icon={Globe} loading={loading} onClick={detect}>Detect public IP</Button>
+        <Button icon={Globe} loading={loading} onClick={detect}>{t('webhook.detectIp')}</Button>
       </div>
       <p className="text-xs text-slate-500 dark:text-slate-400">
-        GitHub must reach this PC from the internet: use its public IP or a DNS name, and forward TCP port {port || 8787} on
-        the router to this PC{localIps.length > 0 && <> (LAN IP: <span className="selectable font-mono">{localIps.join(', ')}</span>)</>}.
-        {failed && <span className="text-red-600 dark:text-red-400"> Could not detect the public IP.</span>}
+        <Trans
+          k="webhook.help"
+          params={{
+            port: port || 8787,
+            lan: localIps.length > 0 && (
+              <Trans k="webhook.lan" params={{ ips: <span className="selectable font-mono">{localIps.join(', ')}</span> }} />
+            ),
+          }}
+        />
+        {failed && <span className="text-red-600 dark:text-red-400"> {t('webhook.ipFailed')}</span>}
       </p>
     </div>
   );

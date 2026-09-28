@@ -1,5 +1,5 @@
-// Client mode: watch server_packages.sii/.dat in the ETS2 documents folder. At every sync the GitHub
-// repository is cloned fresh into a temporary folder, the files are compared, copied, committed and
+// Client mode: watch server_packages.sii/.dat in the documents folder of the game (ETS2 or ATS). At every sync
+// the GitHub repository is cloned fresh into a temporary folder, the files are compared, copied, committed and
 // pushed, and the temporary clone is deleted: every push starts from a clean repository.
 const crypto = require('crypto');
 const fs = require('fs');
@@ -7,12 +7,13 @@ const os = require('os');
 const path = require('path');
 const { Engine, run, sleep } = require('./engine');
 const log = require('./logger');
+const { t, LocalizedError, errorText } = require('./i18n');
 
-const TEMP_ROOT = path.join(os.tmpdir(), 'ets2-package-sync');
+const TEMP_ROOT = path.join(os.tmpdir(), 'ets2-package-sync'); // one subfolder per game
 const BOT_NAME = 'ETS2 Package Sync';
 const BOT_EMAIL = 'ets2-package-sync@users.noreply.github.com';
 
-class GitError extends Error {
+class GitError extends LocalizedError {
   get name() { return 'GitError'; }
 }
 
@@ -39,12 +40,13 @@ function removeDir(dir) {
 }
 
 class ClientEngine extends Engine {
-  constructor(settings) {
-    super(settings);
+  constructor(settings, game) {
+    super(settings, game);
     this.mode = 'client';
-    this.source = settings.ets2_documents_path ? path.resolve(settings.ets2_documents_path) : '';
+    this.source = settings.documents_path ? path.resolve(settings.documents_path) : '';
+    this.tempRoot = path.join(TEMP_ROOT, game.id);
     this.files = [settings.repo_sii_file, settings.repo_dat_file]; // paths inside the repository
-    // ETS2 always writes server_packages.sii/.dat: same file names as in the repository
+    // the game always writes server_packages.sii/.dat: same file names as in the repository
     this.sourceFiles = this.files.map((f) => path.join(this.source, path.basename(f)));
     this.watched = new Set(this.files.map((f) => path.basename(f).toLowerCase()));
     this.lastPush = null;
@@ -59,15 +61,15 @@ class ClientEngine extends Engine {
   // ------------------------------------------------------------------ lifecycle
 
   async start() {
-    if (!this.source) throw new Error('ETS2 documents folder not set');
-    if (!fs.existsSync(this.source)) throw new Error(`ETS2 documents folder not found: ${this.source}`);
-    if (!this.s.repository) throw new Error('GitHub repository URL not set');
+    if (!this.source) throw new LocalizedError('err.docsNotSet', { game: this.game.name });
+    if (!fs.existsSync(this.source)) throw new LocalizedError('err.docsNotFound', { game: this.game.name, path: this.source });
+    if (!this.s.repository) throw new LocalizedError('err.repoNotSet');
     const git = await run('git', ['--version']);
-    if (git.code !== 0) throw new Error('Git is not installed or not in PATH (install Git for Windows)');
-    removeDir(TEMP_ROOT); // leftovers of a previous run that was interrupted
-    log.info(`Client mode, watching ${this.source} -> ${this.s.repository} (${this.s.branch})`);
+    if (git.code !== 0) throw new LocalizedError('err.gitMissing');
+    removeDir(this.tempRoot); // leftovers of a previous run that was interrupted
+    this.log.info(`Client mode, watching ${this.source} -> ${this.s.repository} (${this.s.branch})`);
     this.startWatcher();
-    this.setStatus('Watching', 'ok');
+    this.setStatus('status.watching', 'ok');
     this.pushNow(); // catch changes made while the app was not running
   }
 
@@ -79,11 +81,11 @@ class ClientEngine extends Engine {
   }
 
   infoLines() {
-    return [`Status: ${this.status}`, `Last push: ${this.lastPush || 'never'}`];
+    return [t('tray.status', { status: this.status }), t('tray.lastPush', { value: this.lastPush || t('tray.never') })];
   }
 
   actions() {
-    return [{ id: 'push', label: 'Push Now' }, { id: 'open-repo', label: 'Open Repository' }];
+    return [{ id: 'push', label: t('action.push') }, { id: 'open-repo', label: t('action.openRepo') }];
   }
 
   snapshot() {
@@ -91,7 +93,7 @@ class ClientEngine extends Engine {
       ...super.snapshot(),
       details: {
         sourcePath: this.source,
-        tempPath: TEMP_ROOT,
+        tempPath: this.tempRoot,
         files: this.files.map((f) => path.basename(f)),
         lastCheck: this.lastCheck,
         lastPush: this.lastPush,
@@ -118,27 +120,27 @@ class ClientEngine extends Engine {
       env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     });
     if (check && result.code !== 0) {
-      throw new GitError(`git ${args[0]} failed: ${(result.stderr || result.stdout).trim()}`);
+      throw new GitError('err.gitFailed', { command: args[0], detail: (result.stderr || result.stdout).trim() });
     }
     return result;
   }
 
   /** Fresh shallow clone of the branch into a new temporary folder. */
   async cloneFresh() {
-    const dir = path.join(TEMP_ROOT, `repo-${Date.now()}`);
-    fs.mkdirSync(TEMP_ROOT, { recursive: true });
+    const dir = path.join(this.tempRoot, `repo-${Date.now()}`);
+    fs.mkdirSync(this.tempRoot, { recursive: true });
     const { repository, branch } = this.s;
-    const clone = await this.git(['clone', '--depth', '1', '--single-branch', '--branch', branch, repository, dir], TEMP_ROOT, false);
+    const clone = await this.git(['clone', '--depth', '1', '--single-branch', '--branch', branch, repository, dir], this.tempRoot, false);
     if (clone.code !== 0) {
       if (!/not found in upstream|Remote branch .* not found|empty repository/i.test(clone.stderr)) {
         removeDir(dir);
-        throw new GitError(`git clone failed: ${clone.stderr.trim()}`);
+        throw new GitError('err.gitFailed', { command: 'clone', detail: clone.stderr.trim() });
       }
       // empty repository or branch not created yet: start the branch from scratch
       removeDir(dir);
-      await this.git(['clone', repository, dir], TEMP_ROOT);
+      await this.git(['clone', repository, dir], this.tempRoot);
       await this.git(['checkout', '-B', branch], dir);
-      log.info(`Branch '${branch}' does not exist on GitHub yet: it will be created`);
+      this.log.info(`Branch '${branch}' does not exist on GitHub yet: it will be created`);
     }
     // commits need an author: use the Git for Windows identity if configured, otherwise a neutral one
     if (!(await this.git(['config', 'user.email'], dir, false)).stdout.trim()) {
@@ -150,7 +152,7 @@ class ClientEngine extends Engine {
     return dir;
   }
 
-  /** Wait until the source files stop changing (ETS2 may still be writing them). */
+  /** Wait until the source files stop changing (the game may still be writing them). */
   async waitUntilStable(timeoutMs = 30_000) {
     const snapshot = () => this.sourceFiles.map((f) => {
       const st = fs.statSync(f);
@@ -164,7 +166,7 @@ class ClientEngine extends Engine {
       if (current === previous) return;
       previous = current;
     }
-    throw new GitError('files are still being written, will retry');
+    throw new GitError('err.stillWriting');
   }
 
   /**
@@ -172,7 +174,7 @@ class ClientEngine extends Engine {
    * (someone else pushed in the meantime: the caller retries with a new clone).
    */
   async syncOnce() {
-    this.setStatus('Cloning repository...', 'busy');
+    this.setStatus('status.cloning', 'busy');
     const dir = await this.cloneFresh();
     try {
       const changed = this.files.filter((repoFile, i) => {
@@ -180,16 +182,16 @@ class ClientEngine extends Engine {
         return !fs.existsSync(dest) || sha256(dest) !== sha256(this.sourceFiles[i]);
       });
       if (!changed.length) {
-        log.info('The files on GitHub are already up to date');
+        this.log.info('The files on GitHub are already up to date');
         return 'up-to-date';
       }
 
-      this.setStatus('Pushing...', 'busy');
+      this.setStatus('status.pushing', 'busy');
       for (const repoFile of changed) {
         const dest = path.join(dir, repoFile);
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.copyFileSync(this.sourceFiles[this.files.indexOf(repoFile)], dest);
-        log.info(`Copied ${path.basename(repoFile)} from the ETS2 folder`);
+        this.log.info(`Copied ${path.basename(repoFile)} from the ${this.game.name} folder`);
       }
       await this.git(['add', '--', ...changed], dir);
       await this.git(['commit', '-m', this.s.commit_message, '--', ...changed], dir);
@@ -198,10 +200,10 @@ class ClientEngine extends Engine {
       const push = await this.git(['push', 'origin', `HEAD:refs/heads/${this.s.branch}`], dir, false);
       if (push.code !== 0) {
         if (/\[rejected\]|non-fast-forward|fetch first/i.test(push.stderr)) return 'rejected';
-        throw new GitError(`git push failed: ${push.stderr.trim()}`);
+        throw new GitError('err.gitFailed', { command: 'push', detail: push.stderr.trim() });
       }
       this.lastPush = `${new Date().toLocaleString()} (${sha})`;
-      log.info(`Pushed ${sha} to ${this.s.branch}`);
+      this.log.info(`Pushed ${sha} to ${this.s.branch}`);
       return 'pushed';
     } finally {
       removeDir(dir); // every push starts from a clean clone
@@ -213,7 +215,7 @@ class ClientEngine extends Engine {
     const missing = this.sourceFiles.filter((f) => !fs.existsSync(f)).map((f) => path.basename(f));
     if (missing.length) {
       // not an error: the files appear the first time export_server_packages is run in the game
-      log.info(`Waiting for ${missing.join(', ')} in ${this.source} (run export_server_packages in the ETS2 console)`);
+      this.log.info(`Waiting for ${missing.join(', ')} in ${this.source} (run export_server_packages in the ${this.game.name} console)`);
       this.waitingForExport = true;
       return false;
     }
@@ -222,7 +224,7 @@ class ClientEngine extends Engine {
     await this.waitUntilStable();
     const hash = this.sourceFiles.map(sha256).join(':');
     if (!manual && hash === this.syncedHash) {
-      log.info('Package files unchanged since the last sync');
+      this.log.info('Package files unchanged since the last sync');
       return false;
     }
 
@@ -233,9 +235,9 @@ class ClientEngine extends Engine {
         this.lastCheck = new Date().toLocaleString();
         return result === 'pushed';
       }
-      log.warn(`Push rejected: the branch changed on GitHub, retrying with a fresh clone (${attempt}/3)`);
+      this.log.warn(`Push rejected: the branch changed on GitHub, retrying with a fresh clone (${attempt}/3)`);
     }
-    throw new GitError('push rejected 3 times: the branch keeps changing on GitHub');
+    throw new GitError('err.pushRejected');
   }
 
   async sync(manual = false) {
@@ -246,13 +248,13 @@ class ClientEngine extends Engine {
     this.syncing = true;
     this.busy = true;
     try {
-      this.setStatus('Syncing...', 'busy');
-      if (await this.doSync(manual)) this.notify(`Packages pushed: ${this.lastPush}`);
-      this.setStatus(this.waitingForExport ? 'Watching - waiting for export_server_packages' : 'Watching', 'ok');
+      this.setStatus('status.syncing', 'busy');
+      if (await this.doSync(manual)) this.notify(t('notify.pushed', { value: this.lastPush }));
+      this.setStatus(this.waitingForExport ? 'status.watchingWaiting' : 'status.watching', 'ok');
     } catch (err) {
-      log.error('Sync failed', err);
-      this.setStatus(`Error: ${err.message}`, 'error');
-      this.notify(`Push failed: ${err.message}`);
+      this.log.error('Sync failed', err);
+      this.setError(err);
+      this.notify(t('notify.pushFailed', { message: errorText(err) }));
     } finally {
       this.syncing = false;
       this.busy = false;
@@ -269,13 +271,13 @@ class ClientEngine extends Engine {
   // ------------------------------------------------------------------ watcher
 
   startWatcher() {
-    // the ETS2 folder changes constantly (game.log.txt, profiles...): react only to the package files
+    // the game folder changes constantly (game.log.txt, profiles...): react only to the package files
     const watcher = fs.watch(this.source, { persistent: false }, (event, filename) => {
       if (!filename || !this.watched.has(path.basename(filename).toLowerCase())) return;
-      log.info(`Change detected: ${filename} (${event})`);
+      this.log.info(`Change detected: ${filename} (${event})`);
       this.scheduleSync();
     });
-    watcher.on('error', (err) => log.error('File watcher error', err));
+    watcher.on('error', (err) => this.log.error('File watcher error', err));
     this.watchers.push(watcher);
   }
 }

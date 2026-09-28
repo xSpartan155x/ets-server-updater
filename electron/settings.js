@@ -1,35 +1,39 @@
-// Settings persisted in %APPDATA%\ETS2 Package Sync\settings.json.
+// Settings persisted in %APPDATA%\ETS2 Package Sync\settings.json: personal preferences (theme, language)
+// plus one block per game in `games` (see games.js). Files of older versions (one flat ETS2 block) are
+// migrated to games.ets2 when loaded.
 // Secrets are encrypted with Electron safeStorage (DPAPI on Windows: only this Windows user can read them).
 const fs = require('fs');
 const path = require('path');
 const { app, safeStorage } = require('electron');
 const log = require('./logger');
 const { parseRepository } = require('./engine');
+const { GAMES, GAME_IDS } = require('./games');
+const { t, LocalizedError, errorText } = require('./i18n');
 
 const SECRET_KEYS = ['webhook_secret', 'github_token'];
+const MODES = ['client', 'server'];
 
-const DEFAULTS = {
-  mode: '', // 'client' | 'server'
-  theme: 'system', // 'system' | 'light' | 'dark'
+const GAME_DEFAULTS = {
+  mode: '', // '' (not used) | 'client' | 'server'
   // shared
   repository: '',
   branch: 'master',
   repo_sii_file: 'server_packages.sii',
   repo_dat_file: 'server_packages.dat',
   // client
-  ets2_documents_path: '', // where ETS2 writes the files (export_server_packages); empty = Documents\Euro Truck Simulator 2
-  commit_message: 'Update ETS2 server packages',
+  documents_path: '', // where the game writes the files (export_server_packages); empty = Documents\<game folder>
+  commit_message: '',
   debounce_seconds: 5,
   // server
   webhook_host: '0.0.0.0',
-  webhook_port: 8787,
+  webhook_port: 0,
   webhook_secret: '',
   github_token: '',
   sii_path: '',
   dat_path: '',
-  ets2_executable: '',
-  ets2_working_directory: '',
-  ets2_arguments: '',
+  executable: '',
+  working_directory: '',
+  arguments: '',
   backup_dir: '',
   backup_keep: 10,
   stop_timeout_seconds: 30,
@@ -37,7 +41,47 @@ const DEFAULTS = {
   server_log_path: '', // shown in the Console page; empty = server.log.txt next to the .sii file
 };
 
-const NUMBER_KEYS = Object.keys(DEFAULTS).filter((k) => typeof DEFAULTS[k] === 'number');
+const NUMBER_KEYS = Object.keys(GAME_DEFAULTS).filter((k) => typeof GAME_DEFAULTS[k] === 'number');
+
+// keys of the single-game settings of version 2.1 and older
+const LEGACY_KEYS = {
+  ets2_documents_path: 'documents_path',
+  ets2_executable: 'executable',
+  ets2_working_directory: 'working_directory',
+  ets2_arguments: 'arguments',
+};
+
+function gameDefaults(id) {
+  const game = GAMES[id];
+  return { ...GAME_DEFAULTS, webhook_port: game.defaultPort, commit_message: `Update ${game.name} server packages` };
+}
+
+const DEFAULTS = {
+  theme: 'system', // 'system' | 'light' | 'dark'
+  language: 'system', // 'system' | 'en' | 'it'
+  games: Object.fromEntries(GAME_IDS.map((id) => [id, gameDefaults(id)])),
+};
+
+const isLegacy = (data) => data && typeof data === 'object' && !data.games &&
+  ['mode', 'repository', ...Object.keys(LEGACY_KEYS)].some((key) => key in data);
+
+/** Settings of one game from an old flat file (same keys, with the ets2_ prefix on some). */
+function fromLegacy(data) {
+  const game = {};
+  for (const [key, value] of Object.entries(data)) game[LEGACY_KEYS[key] || key] = value;
+  return game;
+}
+
+/** Complete settings from stored or imported data: unknown keys dropped, missing ones defaulted. */
+function normalize(stored = {}) {
+  const games = {};
+  for (const id of GAME_IDS) {
+    const source = isLegacy(stored) ? (id === 'ets2' ? fromLegacy(stored) : {}) : (stored.games?.[id] || {});
+    games[id] = gameDefaults(id);
+    for (const key of Object.keys(GAME_DEFAULTS)) if (key in source) games[id][key] = source[key];
+  }
+  return { theme: stored.theme || DEFAULTS.theme, language: stored.language || DEFAULTS.language, games };
+}
 
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 
@@ -50,15 +94,17 @@ function loadSettings() {
     if (err.code !== 'ENOENT') log.error('Unreadable settings file, using defaults', err);
     return null;
   }
-  const settings = { ...DEFAULTS, ...stored };
-  for (const key of SECRET_KEYS) {
-    const value = settings[key] || '';
-    if (value.startsWith('enc:')) {
+  if (isLegacy(stored)) log.info('Settings of a previous version: moved to the ETS2 game');
+  const settings = normalize(stored);
+  for (const id of GAME_IDS) {
+    for (const key of SECRET_KEYS) {
+      const value = settings.games[id][key] || '';
+      if (!value.startsWith('enc:')) continue;
       try {
-        settings[key] = safeStorage.decryptString(Buffer.from(value.slice(4), 'base64'));
+        settings.games[id][key] = safeStorage.decryptString(Buffer.from(value.slice(4), 'base64'));
       } catch {
-        log.error(`Cannot decrypt '${key}' (different Windows user?): set it again in Settings`);
-        settings[key] = '';
+        log.error(`Cannot decrypt '${key}' of ${GAMES[id].name} (different Windows user?): set it again in Settings`);
+        settings.games[id][key] = '';
       }
     }
   }
@@ -66,55 +112,77 @@ function loadSettings() {
 }
 
 function saveSettings(settings) {
-  const stored = {};
-  for (const key of Object.keys(DEFAULTS)) stored[key] = settings[key] ?? DEFAULTS[key];
-  for (const key of SECRET_KEYS) {
-    if (stored[key]) stored[key] = 'enc:' + safeStorage.encryptString(stored[key]).toString('base64');
+  const stored = normalize(settings);
+  for (const id of GAME_IDS) {
+    for (const key of SECRET_KEYS) {
+      const value = stored.games[id][key];
+      if (value) stored.games[id][key] = 'enc:' + safeStorage.encryptString(value).toString('base64');
+    }
   }
   fs.mkdirSync(path.dirname(settingsFile()), { recursive: true });
   fs.writeFileSync(settingsFile(), JSON.stringify(stored, null, 2));
   log.info('Settings saved');
 }
 
-/** Returns a list of error messages (empty when valid). */
-function validateSettings(s) {
+const activeGames = (settings) => GAME_IDS.filter((id) => MODES.includes(settings.games[id].mode));
+
+/** Errors of one game, without the game name. */
+function validateGame(s) {
   const errors = [];
-  if (!['client', 'server'].includes(s.mode)) errors.push('Choose the mode of this PC (Client or Server).');
   try {
     parseRepository(s.repository);
   } catch (err) {
-    errors.push(err.message);
-  }
-  for (const key of NUMBER_KEYS) {
-    if (!Number.isInteger(s[key]) || s[key] < 0) errors.push(`${key} must be a positive whole number.`);
+    errors.push(errorText(err));
   }
   const required = {
-    client: { ets2_documents_path: 'ETS2 documents folder' },
+    client: { documents_path: 'field.documents' },
     server: {
-      webhook_secret: 'Webhook secret',
-      sii_path: 'SII file path',
-      dat_path: 'DAT file path',
-      ets2_executable: 'ETS2 server executable',
+      webhook_secret: 'field.webhookSecret',
+      sii_path: 'field.siiPath',
+      dat_path: 'field.datPath',
+      executable: 'field.serverExe',
     },
   }[s.mode] || {};
   for (const [key, label] of Object.entries(required)) {
-    if (!String(s[key] || '').trim()) errors.push(`${label} is required.`);
+    if (!String(s[key] || '').trim()) errors.push(t('err.required', { label: t(label) }));
   }
+  return errors;
+}
+
+/** Returns a list of error messages (empty when valid). */
+function validateSettings(settings) {
+  const errors = [];
+  const active = activeGames(settings);
+  if (!active.length) errors.push(t('err.chooseMode'));
+  for (const id of GAME_IDS) {
+    const s = settings.games[id];
+    const own = active.includes(id) ? validateGame(s) : [];
+    for (const key of NUMBER_KEYS) {
+      if (!Number.isInteger(s[key]) || s[key] < 0) own.push(t('err.number', { key }));
+    }
+    errors.push(...own.map((e) => `${GAMES[id].name}: ${e}`));
+  }
+  const ports = active.filter((id) => settings.games[id].mode === 'server').map((id) => settings.games[id].webhook_port);
+  if (new Set(ports).size < ports.length) errors.push(t('err.samePort', { port: ports[0] }));
+  // two games writing the same files of the same branch would overwrite each other
+  const targets = active.map((id) => {
+    const s = settings.games[id];
+    return [s.repository.trim().replace(/(\.git)?\/*$/, '').toLowerCase(), s.branch, s.repo_sii_file, s.repo_dat_file].join('|');
+  });
+  if (new Set(targets).size < targets.length) errors.push(t('err.sameRepo'));
   return errors;
 }
 
 // ------------------------------------------------------------------ export / import (file shared between PCs)
 
 const EXPORT_APP = 'ets2-package-sync';
-const EXPORT_FORMAT = 1;
-const NOT_EXPORTED = ['theme']; // personal preference of each PC
+const EXPORT_FORMAT = 2; // 1: one flat ETS2 block (version 2.1 and older)
 
-/** Settings file content. Secrets are written in clear text only when asked. */
+/** Settings file content: the games only (theme and language are personal). Secrets only when asked. */
 function buildExport(values, includeSecrets, version) {
-  const settings = {};
-  for (const key of Object.keys(DEFAULTS)) {
-    if (NOT_EXPORTED.includes(key) || (!includeSecrets && SECRET_KEYS.includes(key))) continue;
-    settings[key] = values[key] ?? DEFAULTS[key];
+  const { games } = normalize(values);
+  if (!includeSecrets) {
+    for (const id of GAME_IDS) for (const key of SECRET_KEYS) delete games[id][key];
   }
   return JSON.stringify({
     app: EXPORT_APP,
@@ -122,35 +190,45 @@ function buildExport(values, includeSecrets, version) {
     version,
     exportedAt: new Date().toISOString(),
     includesSecrets: Boolean(includeSecrets),
-    settings,
+    settings: { games },
   }, null, 2);
 }
 
-/** Parse an exported file: only known keys with a valid type are kept. Throws on a foreign file. */
+/**
+ * Parse an exported file: only known keys with a valid type are kept, as { games: { id: {...} } } with only
+ * the games in the file. Throws on a foreign file.
+ */
 function parseImport(text) {
   let data;
   try {
-    data = JSON.parse(String(text).replace(/^\uFEFF/, ''));
+    data = JSON.parse(String(text).replace(/^﻿/, ''));
   } catch {
-    throw new Error('The file is not valid JSON.');
+    throw new LocalizedError('err.notJson');
   }
   if (!data || data.app !== EXPORT_APP || typeof data.settings !== 'object' || !data.settings) {
-    throw new Error('This is not a settings file of ETS2 Package Sync.');
+    throw new LocalizedError('err.notSettings');
   }
   if (Number(data.format) > EXPORT_FORMAT) {
-    throw new Error(`The file was made by a newer version (${data.version || 'unknown'}): update the app first.`);
+    throw new LocalizedError('err.newerFormat', { version: data.version || '?' });
   }
-  const settings = {};
+  const sources = isLegacy(data.settings) ? { ets2: fromLegacy(data.settings) } : (data.settings.games || {});
+  const games = {};
   const skipped = [];
-  for (const [key, value] of Object.entries(data.settings)) {
-    if (!(key in DEFAULTS) || NOT_EXPORTED.includes(key)) continue;
-    const valid = typeof DEFAULTS[key] === 'number'
-      ? Number.isInteger(value) && value >= 0
-      : typeof value === 'string' && value.length <= 4096 && (key !== 'mode' || ['', 'client', 'server'].includes(value));
-    if (valid) settings[key] = value;
-    else skipped.push(key);
+  for (const id of GAME_IDS) {
+    const source = sources[id];
+    if (!source || typeof source !== 'object') continue;
+    games[id] = {};
+    for (const [key, value] of Object.entries(source)) {
+      if (!(key in GAME_DEFAULTS)) continue;
+      const valid = typeof GAME_DEFAULTS[key] === 'number'
+        ? Number.isInteger(value) && value >= 0
+        : typeof value === 'string' && value.length <= 4096 && (key !== 'mode' || ['', ...MODES].includes(value));
+      if (valid) games[id][key] = value;
+      else skipped.push(`${GAMES[id].name} ${key}`);
+    }
   }
-  return { settings, skipped, version: String(data.version || ''), includesSecrets: SECRET_KEYS.some((k) => k in settings) };
+  const includesSecrets = Object.values(games).some((game) => SECRET_KEYS.some((k) => k in game));
+  return { settings: { games }, skipped, version: String(data.version || ''), includesSecrets };
 }
 
-module.exports = { DEFAULTS, loadSettings, saveSettings, validateSettings, buildExport, parseImport };
+module.exports = { DEFAULTS, normalize, activeGames, loadSettings, saveSettings, validateSettings, buildExport, parseImport };

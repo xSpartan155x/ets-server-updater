@@ -3,7 +3,9 @@ import {
   Power, RefreshCw, Server, Settings as SettingsIcon, Webhook,
 } from 'lucide-react';
 import { Button, Card, PageHeader, StatusDot, STATE_STYLES, WebhookUrl } from '../components/ui';
+import { GAME } from '../games';
 import { LogLine } from './Logs';
+import { Trans, useT } from '../i18n';
 
 function Stat({ icon: Icon, label, children }) {
   return (
@@ -18,8 +20,9 @@ function Stat({ icon: Icon, label, children }) {
 }
 
 function StatusHero({ snapshot }) {
+  const t = useT();
   const style = STATE_STYLES[snapshot.state] || STATE_STYLES.idle;
-  const label = { ok: 'Running', busy: 'Working', error: 'Needs attention', idle: 'Not configured' }[snapshot.state];
+  const label = t(`dash.state.${snapshot.state in STATE_STYLES ? snapshot.state : 'idle'}`);
   return (
     <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
       <div className={`flex size-12 shrink-0 items-center justify-center rounded-full ${style.soft} ring-8 ${style.ring}`}>
@@ -34,17 +37,18 @@ function StatusHero({ snapshot }) {
 }
 
 function RecentActivity({ logs, onNavigate }) {
+  const t = useT();
   const recent = logs.slice(-8).reverse();
   return (
     <Card
-      title="Recent activity"
+      title={t('dash.recent')}
       icon={Activity}
-      actions={<Button variant="ghost" onClick={() => onNavigate('logs')} className="py-1 text-xs">View all</Button>}
+      actions={<Button variant="ghost" onClick={() => onNavigate('logs')} className="py-1 text-xs">{t('dash.viewAll')}</Button>}
     >
       {recent.length ? (
         <div className="-my-1 space-y-0.5">{recent.map((line, i) => <LogLine key={i} line={line} compact />)}</div>
       ) : (
-        <p className="text-sm text-slate-500 dark:text-slate-400">No activity yet.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t('dash.noActivity')}</p>
       )}
     </Card>
   );
@@ -72,74 +76,74 @@ function FlowArrow({ label }) {
   );
 }
 
-function ClientView({ data, snapshot }) {
-  const d = snapshot.details;
+/** g: snapshot of the game; s: its settings. */
+function ClientView({ game, g, s }) {
+  const t = useT();
+  const d = g.details;
   return (
     <>
-      <Card
-        title="How files flow"
-        icon={Copy}
-        description="Run export_server_packages in the ETS2 console: the repository is cloned fresh, the changed files are pushed and the clone is deleted."
-      >
+      <Card title={t('dash.flowTitle')} icon={Copy} description={t('dash.flowDescription', { game: game.name })}>
         <div className="flex items-stretch gap-2">
-          <FlowStep icon={FolderOpen} title="ETS2 documents folder" detail={d.sourcePath} footer={d.files?.join(', ')} />
-          <FlowArrow label="copy" />
-          <FlowStep icon={FolderGit2} title="Temporary clone" detail={d.tempPath} footer="Deleted after every push" />
-          <FlowArrow label="push" />
-          <FlowStep icon={Cloud} title="GitHub" detail={data.settings.repository} footer={`Last push: ${d.lastPush || 'never'}`} />
+          <FlowStep icon={FolderOpen} title={t('dash.flowSource', { game: game.name })} detail={d.sourcePath} footer={d.files?.join(', ')} />
+          <FlowArrow label={t('dash.flowCopy')} />
+          <FlowStep icon={FolderGit2} title={t('dash.flowTemp')} detail={d.tempPath} footer={t('dash.flowTempFooter')} />
+          <FlowArrow label={t('dash.flowPush')} />
+          <FlowStep icon={Cloud} title="GitHub" detail={s.repository} footer={t('dash.flowLastPush', { value: d.lastPush || t('dash.never') })} />
         </div>
       </Card>
       <div className="grid grid-cols-3 gap-4">
-        <Stat icon={GitBranch} label="Branch">{d.branch}</Stat>
-        <Stat icon={RefreshCw} label="Last check">{d.lastCheck || 'Never'}</Stat>
-        <Stat icon={CloudUpload} label="Last push">{d.lastPush || 'Never'}</Stat>
+        <Stat icon={GitBranch} label={t('dash.branch')}>{d.branch}</Stat>
+        <Stat icon={RefreshCw} label={t('dash.lastCheck')}>{d.lastCheck || t('dash.Never')}</Stat>
+        <Stat icon={CloudUpload} label={t('dash.lastPush')}>{d.lastPush || t('dash.Never')}</Stat>
       </div>
     </>
   );
 }
 
-function ServerView({ data, snapshot }) {
-  const d = snapshot.details;
+function ServerView({ game, g, localIps }) {
+  const t = useT();
+  const d = g.details;
   return (
     <>
       <div className="grid grid-cols-3 gap-4">
-        <Stat icon={Server} label="ETS2 server">
-          <span className={`inline-flex items-center gap-2 ${d.ets2Running ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-            <StatusDot state={d.ets2Running ? 'ok' : 'idle'} />
-            {d.ets2Running ? 'Running' : 'Stopped'}
+        <Stat icon={Server} label={t('dash.gameServer', { game: game.name })}>
+          <span className={`inline-flex items-center gap-2 ${d.serverRunning ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+            <StatusDot state={d.serverRunning ? 'ok' : 'idle'} />
+            {d.serverRunning ? t('console.running') : t('console.stopped')}
           </span>
         </Stat>
-        <Stat icon={GitCommit} label="Installed commit">
-          {d.lastCommit ? <span className="font-mono">{d.lastCommit.slice(0, 7)}</span> : 'None yet'}
+        <Stat icon={GitCommit} label={t('dash.installedCommit')}>
+          {d.lastCommit ? <span className="font-mono">{d.lastCommit.slice(0, 7)}</span> : t('dash.noneYet')}
         </Stat>
-        <Stat icon={RefreshCw} label="Last update">{d.lastUpdate || 'Never'}</Stat>
+        <Stat icon={RefreshCw} label={t('dash.lastUpdate')}>{d.lastUpdate || t('dash.Never')}</Stat>
       </div>
-      <Card title="GitHub webhook" icon={Webhook} description="Paste this Payload URL in GitHub → Settings → Webhooks (content type application/json, push event only).">
-        <WebhookUrl port={d.port} localIps={data.localIps} />
+      <Card title={t('dash.webhookTitle', { game: game.name })} icon={Webhook} description={t('dash.webhookDescription')}>
+        <WebhookUrl port={d.port} localIps={localIps} />
       </Card>
     </>
   );
 }
 
-export default function Dashboard({ data, snapshot, logs, onNavigate }) {
-  const mode = snapshot.mode;
+export default function Dashboard({ data, snapshot, logs, game: id, onNavigate }) {
+  const t = useT();
+  const game = GAME[id];
+  const g = snapshot.games[id];
 
-  if (!mode) {
+  if (!g) {
     return (
       <>
-        <PageHeader title="Dashboard" />
+        <PageHeader title={t('dash.title')} />
         <div className="px-8">
           <Card>
             <div className="flex flex-col items-center py-10 text-center">
               <div className="mb-4 rounded-full bg-orange-50 p-4 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400">
                 <SettingsIcon className="size-7" />
               </div>
-              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Choose how this PC is used</h2>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('dash.chooseTitle')}</h2>
               <p className="mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
-                Set this PC as <b>Client</b> (pushes the package files to GitHub) or <b>Server</b> (receives the
-                GitHub webhook and updates the ETS2 dedicated server).
+                <Trans k="dash.chooseText" params={{ game: game.fullName }} />
               </p>
-              <Button variant="primary" className="mt-6" onClick={() => onNavigate('settings')}>Open Settings</Button>
+              <Button variant="primary" className="mt-6" onClick={() => onNavigate('settings')}>{t('dash.openSettings')}</Button>
             </div>
           </Card>
         </div>
@@ -147,37 +151,39 @@ export default function Dashboard({ data, snapshot, logs, onNavigate }) {
     );
   }
 
-  const actions = mode === 'client'
+  const actions = g.mode === 'client'
     ? [
-      { id: 'open-repo', label: 'Open Repository', icon: ExternalLink },
-      { id: 'push', label: 'Push Now', icon: CloudUpload, primary: true },
+      { id: 'open-repo', label: t('action.openRepo'), icon: ExternalLink },
+      { id: 'push', label: t('action.push'), icon: CloudUpload, primary: true },
     ]
     : [
-      { id: 'restart', label: 'Restart ETS2', icon: Power },
-      { id: 'update', label: 'Update Now', icon: RefreshCw, primary: true },
+      { id: 'restart', label: t('action.restart', { game: game.name }), icon: Power },
+      { id: 'update', label: t('action.update'), icon: RefreshCw, primary: true },
     ];
 
   return (
     <>
       <PageHeader
-        title="Dashboard"
-        subtitle={mode === 'client' ? 'Client mode - copies the exported packages and pushes them to GitHub' : 'Server mode - installs packages pushed to GitHub'}
+        title={t('dash.title')}
+        subtitle={t(g.mode === 'client' ? 'dash.subtitleClient' : 'dash.subtitleServer', { game: game.name })}
       >
         {actions.map((a) => (
           <Button
             key={a.id}
             variant={a.primary ? 'primary' : 'secondary'}
             icon={a.icon}
-            disabled={snapshot.busy && a.id !== 'open-repo'}
-            onClick={() => window.api.runAction(a.id)}
+            disabled={g.busy && a.id !== 'open-repo'}
+            onClick={() => window.api.runAction(id, a.id)}
           >
             {a.label}
           </Button>
         ))}
       </PageHeader>
       <div className="space-y-4 px-8 pb-8">
-        <StatusHero snapshot={snapshot} />
-        {mode === 'client' ? <ClientView data={data} snapshot={snapshot} /> : <ServerView data={data} snapshot={snapshot} />}
+        <StatusHero snapshot={g} />
+        {g.mode === 'client'
+          ? <ClientView game={game} g={g} s={data.settings.games[id]} />
+          : <ServerView game={game} g={g} localIps={data.localIps} />}
         <RecentActivity logs={logs} onNavigate={onNavigate} />
       </div>
     </>

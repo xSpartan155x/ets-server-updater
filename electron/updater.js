@@ -7,6 +7,7 @@ const { EventEmitter } = require('events');
 const { app } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const log = require('./logger');
+const { t, LocalizedError, errorText } = require('./i18n');
 
 const OWNER = 'xSpartan155x';
 const REPO = 'ets-server-updater';
@@ -20,12 +21,13 @@ function canInstall() {
   return fs.existsSync(path.join(path.dirname(process.execPath), `Uninstall ${app.getName()}.exe`));
 }
 
+/** Short error for the UI: a LocalizedError for the known cases, else the first line of the message. */
 function friendlyError(err) {
   const text = String((err && err.message) || err || 'unknown error');
-  if (/latest\.yml/i.test(text) && /cannot find|404/i.test(text)) return 'The latest release has no update file (latest.yml).';
-  if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|net::ERR_/i.test(text)) return 'GitHub is not reachable. Check the internet connection.';
-  if (/403|rate limit/i.test(text)) return 'GitHub refused the request (rate limit). Try again later.';
-  return text.split('\n')[0].slice(0, 160);
+  if (/latest\.yml/i.test(text) && /cannot find|404/i.test(text)) return new LocalizedError('err.noLatestYml');
+  if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|net::ERR_/i.test(text)) return new LocalizedError('err.offline');
+  if (/403|rate limit/i.test(text)) return new LocalizedError('err.rateLimit');
+  return new Error(text.split('\n')[0].slice(0, 160));
 }
 
 class Updater extends EventEmitter {
@@ -36,7 +38,7 @@ class Updater extends EventEmitter {
       current: app.getVersion(),
       latest: '',
       progress: 0,
-      error: '',
+      error: null, // Error: translated by view()
       checkedAt: '',
       canInstall: canInstall(),
       releaseUrl: RELEASES_URL,
@@ -51,13 +53,13 @@ class Updater extends EventEmitter {
     autoUpdater.setFeedURL({ provider: 'github', owner: OWNER, repo: REPO });
     if (!app.isPackaged) autoUpdater.forceDevUpdateConfig = true; // npm run dev: check only
 
-    autoUpdater.on('checking-for-update', () => this.set({ status: 'checking', error: '' }));
+    autoUpdater.on('checking-for-update', () => this.set({ status: 'checking', error: null }));
     autoUpdater.on('update-available', (info) => {
       this.set({ status: 'available', latest: info.version, releaseUrl: `${RELEASES_URL}/tag/v${info.version}`, checkedAt: now() });
       if (this.notified !== info.version) { // once per version, not at every periodic check
         this.notified = info.version;
         log.info(`Update available: ${info.version} (current ${this.state.current})`);
-        this.emit('notify', `Update available: version ${info.version}`);
+        this.emit('notify', t('notify.appUpdateAvailable', { version: info.version }));
       }
     });
     autoUpdater.on('update-not-available', (info) => {
@@ -68,20 +70,26 @@ class Updater extends EventEmitter {
     autoUpdater.on('update-downloaded', (info) => {
       this.set({ status: 'downloaded', progress: 100, latest: info.version });
       log.info(`Update ${info.version} downloaded: it is installed on restart`);
-      this.emit('notify', `Update ${info.version} ready: restart the app to install it`);
+      this.emit('notify', t('notify.appUpdateReady', { version: info.version }));
     });
     autoUpdater.on('error', (err) => {
       // a failed background check must not bother the user: only manual checks show the error
       const wasDownloading = this.state.status === 'downloading';
-      log.warn(`Update ${wasDownloading ? 'download' : 'check'} failed: ${friendlyError(err)}`);
-      if (this.manual || wasDownloading) this.set({ status: 'error', error: friendlyError(err), checkedAt: now() });
+      const error = friendlyError(err);
+      log.warn(`Update ${wasDownloading ? 'download' : 'check'} failed: ${error.message}`);
+      if (this.manual || wasDownloading) this.set({ status: 'error', error, checkedAt: now() });
       else this.set({ status: this.before || 'idle' });
     });
   }
 
   set(values) {
     this.state = { ...this.state, ...values };
-    this.emit('change', this.state);
+    this.emit('change', this.view());
+  }
+
+  /** State sent to the UI, with the error in the current language. */
+  view() {
+    return { ...this.state, error: errorText(this.state.error) };
   }
 
   start() {
@@ -90,7 +98,7 @@ class Updater extends EventEmitter {
   }
 
   async check(manual = true) {
-    if (['checking', 'downloading', 'downloaded'].includes(this.state.status)) return this.state;
+    if (['checking', 'downloading', 'downloaded'].includes(this.state.status)) return this.view();
     this.manual = manual;
     this.before = this.state.status; // restored if a background check fails
     try {
@@ -98,19 +106,19 @@ class Updater extends EventEmitter {
     } catch {
       // reported by the 'error' event
     }
-    return this.state;
+    return this.view();
   }
 
   async download() {
-    if (this.state.status !== 'available' || !this.state.canInstall) return this.state;
+    if (this.state.status !== 'available' || !this.state.canInstall) return this.view();
     this.manual = true;
-    this.set({ status: 'downloading', progress: 0, error: '' });
+    this.set({ status: 'downloading', progress: 0, error: null });
     try {
       await autoUpdater.downloadUpdate();
     } catch {
       // reported by the 'error' event
     }
-    return this.state;
+    return this.view();
   }
 
   /** Quit and run the installer (silent, same folder), then start the new version. */
