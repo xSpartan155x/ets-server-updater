@@ -240,7 +240,7 @@ export default {
   'cfg.password': 'Password',
   'cfg.passwordHint': 'Vuota = può entrare chiunque.',
   'cfg.max_players': 'Giocatori massimi',
-  'cfg.maxPlayersHint': 'Da 1 a 8.',
+  'cfg.maxPlayersHint': 'Da 1 a 128.',
   'cfg.steam': 'Accesso a Steam',
   'cfg.steamDescription': 'Il token del server dedicato: crealo nella pagina di Steam con App ID {appId} ({game}), uno per ogni server.',
   'cfg.server_logon_token': 'Token di login del server',
