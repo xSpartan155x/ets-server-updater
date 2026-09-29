@@ -220,10 +220,10 @@ function Layout({
 
   return (
     <div className="flex h-full">
-      <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <GameSwitcher value={game} onChange={setGame} snapshot={snapshot} />
 
-        <nav className="flex-1 space-y-1 px-3">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
           {NAV.filter((item) => !item.server || isServer).map(({ id, icon: Icon, children }) => (children ? (
             <div key={id}>
               <button
