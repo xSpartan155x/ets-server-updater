@@ -12,7 +12,7 @@ const {
 } = require('./settings');
 const { ClientEngine } = require('./client-engine');
 const { ServerHost } = require('./server-host');
-const { GAMES, GAME_IDS } = require('./games');
+const { GAMES, GAME_IDS, gameHomeOf } = require('./games');
 const { SteamCmd } = require('./steamcmd');
 const {
   parseServerConfig, updateServerConfig, checkConfig, portsOf, freePorts, newServerConfig,
@@ -370,7 +370,9 @@ const instanceOf = (game, id) => hostOf(game)?.instances.get(id) || null;
 function usedPorts() {
   const files = GAME_IDS.flatMap((game) => settings.games[game].server.servers.map((s) => {
     const instance = instanceOf(game, s.id);
-    return instance ? instance.configFile : path.join(path.resolve(s.homedir || '.'), 'server_config.sii');
+    if (instance) return instance.configFile;
+    const gameHome = gameHomeOf(GAMES[game].documentsFolder, s.homedir ? path.resolve(s.homedir) : '');
+    return path.join(gameHome || '.', 'server_config.sii');
   }));
   return files.filter((file) => fs.existsSync(file)).map((file) => {
     try {
@@ -432,14 +434,16 @@ async function createServer(game, form) {
   if (anyBusy()) return { ok: false, errors: [t('err.busySave')] };
 
   const plan = serverPlan(game, name);
+  // the server keeps its files one level under -homedir, in its own "<documentsFolder>" subfolder (see gameHomeOf)
+  const gameHome = gameHomeOf(GAMES[game].documentsFolder, homedir);
   try {
-    fs.mkdirSync(homedir, { recursive: true });
-    const configFile = path.join(homedir, 'server_config.sii');
+    fs.mkdirSync(gameHome, { recursive: true });
+    const configFile = path.join(gameHome, 'server_config.sii');
     if (!fs.existsSync(configFile)) fs.writeFileSync(configFile, newServerConfig(config, form.moderators || []));
     const source = plan.sources.find((src) => src.id === form.packagesFrom);
     if (source) {
-      fs.copyFileSync(source.sii, path.join(homedir, 'server_packages.sii'));
-      fs.copyFileSync(source.dat, path.join(homedir, 'server_packages.dat'));
+      fs.copyFileSync(source.sii, path.join(gameHome, 'server_packages.sii'));
+      fs.copyFileSync(source.dat, path.join(gameHome, 'server_packages.dat'));
     }
   } catch (err) {
     return { ok: false, errors: [t('err.createServer', { message: err.message })] };
@@ -449,7 +453,7 @@ async function createServer(game, form) {
   const created = saved.games[game].server.servers[saved.games[game].server.servers.length - 1];
   settings = { ...saved, theme: settings.theme, language: settings.language };
   saveSettings(settings);
-  log.info(`${GAMES[game].name}: server "${name}" created in ${homedir}`);
+  log.info(`${GAMES[game].name}: server "${name}" created in ${gameHome}`);
   await restartServerHost(game);
   if (form.install && !plan.installed) runAction(game, 'server', 'steam-update');
   return { ok: true, id: created.id };
@@ -623,7 +627,7 @@ function registerIpc() {
   ipcMain.handle('open-path', (_event, game, id, what) => {
     const instance = instanceOf(game, id);
     const target = what === 'install' ? hostOf(game)?.installDir
-      : !instance ? null : what === 'home' ? instance.homedir : what === 'config' ? instance.configFile : instance.consoleFile;
+      : !instance ? null : what === 'home' ? instance.gameHome : what === 'config' ? instance.configFile : instance.consoleFile;
     if (target && fs.existsSync(target)) shell.openPath(target);
   });
 

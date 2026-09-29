@@ -119,10 +119,15 @@ class ServerHost extends Engine {
       'Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress';
     const r = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 30_000 });
     if (r.code !== 0 || !r.stdout.trim()) return [];
+    // -homedir is never the server's real home: it always nests its own "<documentsFolder>" under it (see
+    // gameHomeOf in games.js), so the raw value from the command line is turned into that real folder here.
     return [].concat(JSON.parse(r.stdout))
       // ExecutablePath is null for processes of other users: they are matched by name and home folder only
       .filter((p) => !p.ExecutablePath || samePath(p.ExecutablePath, this.exe))
-      .map((p) => ({ pid: p.ProcessId, exe: p.ExecutablePath, homedir: homedirOf(p.CommandLine) || this.documentsHome }));
+      .map((p) => {
+        const raw = homedirOf(p.CommandLine);
+        return { pid: p.ProcessId, exe: p.ExecutablePath, homedir: raw ? path.join(raw, this.game.documentsFolder) : this.documentsHome };
+      });
   }
 
   /** Look for the processes and give each server its own (matched by -homedir). */
@@ -136,7 +141,7 @@ class ServerHost extends Engine {
     }
     let changed = false;
     for (const instance of this.list) {
-      const pids = processes.filter((p) => samePath(p.homedir, instance.homedir)).map((p) => p.pid).sort();
+      const pids = processes.filter((p) => samePath(p.homedir, instance.gameHome)).map((p) => p.pid).sort();
       if (pids.join() !== instance.pids.join()) {
         if (pids.length && !instance.pids.length) instance.console.rewind(); // started outside this app
         instance.pids = pids;
