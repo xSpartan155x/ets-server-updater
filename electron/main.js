@@ -196,10 +196,13 @@ function applyLanguage(preference) {
 
 function createWindow() {
   win = new BrowserWindow({
+    // Sizes of the page, not of the frame. The minimum fits the sidebar in Server mode and the widest
+    // Guide table without scrollbars.
+    useContentSize: true,
     width: 1000,
-    height: 720,
-    minWidth: 760,
-    minHeight: 560,
+    height: 700,
+    minWidth: 820,
+    minHeight: 660,
     show: false,
     title: APP_NAME,
     icon: path.join(ICON_DIR, 'icon.ico'), // multi-size: sharp in title bar, taskbar and Alt+Tab

@@ -220,7 +220,7 @@ function Layout({
 
   return (
     <div className="flex h-full">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <GameSwitcher value={game} onChange={setGame} snapshot={snapshot} />
 
         <nav className="flex-1 space-y-1 px-3">
@@ -275,7 +275,7 @@ function Layout({
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">
+      <main className="min-w-0 flex-1 overflow-y-auto">
         <UpdateBanner />
         {current === 'dashboard' && <Dashboard data={data} snapshot={snapshot} logs={logs} game={game} onNavigate={setPage} git={git} onGitHelp={onGitHelp} />}
         {current === 'settings' && (

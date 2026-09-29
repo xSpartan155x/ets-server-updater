@@ -21,6 +21,11 @@ html, body, #root {
   height: 100%;
 }
 
+/* Only the sidebar and the page area scroll, never the whole window */
+body {
+  overflow: hidden;
+}
+
 body {
   @apply bg-slate-50 text-slate-800 antialiased select-none dark:bg-slate-950 dark:text-slate-200;
 }
