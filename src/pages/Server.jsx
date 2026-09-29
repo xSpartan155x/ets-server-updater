@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Activity, FileText, HardDriveDownload, Play, RefreshCw, RotateCw, Save, Search, Settings as SettingsIcon, Square, Tag,
+  AlertTriangle, FileCog, FileText, FolderOpen, HardDriveDownload, Play, Plus, RefreshCw, RotateCw, Save, Search, Settings as SettingsIcon,
+  SlidersHorizontal, Square, SquareTerminal,
 } from 'lucide-react';
-import { Button, Card, Field, NumberInput, PageHeader, PathInput, StatusDot, Toggle } from '../components/ui';
+import { Badge, Button, Card, Field, NumberInput, PageHeader, StatusDot, Toggle } from '../components/ui';
 import ServerConfig from './ServerConfig';
+import ServerList from './server/ServerList';
+import { ServerSettings } from './server/EditServer';
 import { GAME } from '../games';
 import { useT } from '../i18n';
 
@@ -14,29 +17,8 @@ function lineStyle(line) {
   return 'text-slate-300';
 }
 
-function Tile({ icon: Icon, label, children }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
-      <div className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-        <Icon className="size-3.5" />
-        {label}
-      </div>
-      <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-slate-900 dark:text-slate-100">{children}</div>
-    </div>
-  );
-}
-
-/** "Up to date" / "Update available" next to the installed build (nothing while a build is unknown). */
-function BuildBadge({ steam }) {
-  const t = useT();
-  if (!steam.installed || !steam.latest) return null;
-  return steam.installed !== steam.latest
-    ? <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-orange-700 dark:bg-orange-500/15 dark:text-orange-400">{t('dash.steamAvailable')}</span>
-    : <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">{t('dash.steamUpToDate')}</span>;
-}
-
-/** Live log of the dedicated server (server.log.txt), with filter and follow. */
-function ConsoleView({ id, lines }) {
+/** Live log of a server (server.log.txt of its home folder), with filter and follow. */
+function ConsoleView({ game, server, lines }) {
   const t = useT();
   const [query, setQuery] = useState('');
   const [hideWarnings, setHideWarnings] = useState(false);
@@ -49,7 +31,7 @@ function ConsoleView({ id, lines }) {
 
   useEffect(() => {
     if (follow) bottom.current?.scrollIntoView({ block: 'end' });
-  }, [visible.length, follow, id]);
+  }, [visible.length, follow, server.id]);
 
   return (
     <>
@@ -71,7 +53,7 @@ function ConsoleView({ id, lines }) {
           <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} className="cursor-pointer accent-orange-600" />
           {t('console.follow')}
         </label>
-        <Button variant="ghost" icon={FileText} onClick={() => window.api.openConsoleFile(id)} className="ml-auto py-1 text-xs">
+        <Button variant="ghost" icon={FileText} onClick={() => window.api.servers.open(game, server.id, 'console')} className="ml-auto py-1 text-xs">
           {t('console.openFile')}
         </Button>
       </div>
@@ -79,7 +61,7 @@ function ConsoleView({ id, lines }) {
         {visible.length ? visible.map((line, i) => (
           <div key={i} className={`whitespace-pre-wrap wrap-break-word ${lineStyle(line)}`}>{line || ' '}</div>
         )) : (
-          <p className="text-slate-500">{lines.length ? t('console.noMatch') : t('console.empty', { game: GAME[id].name })}</p>
+          <p className="text-slate-500">{lines.length ? t('console.noMatch') : t('console.emptyServer', { name: server.name })}</p>
         )}
         <div ref={bottom} />
       </div>
@@ -88,20 +70,19 @@ function ConsoleView({ id, lines }) {
 }
 
 /**
- * Options of the updates: the switch is applied right away, hours and folder with Save.
- * They are saved in the settings of the game without restarting the server.
+ * Options of the updates of the installation: the switch is applied right away, the hours with Save.
+ * They are saved in the settings of the game without restarting the servers.
  */
-function UpdateOptions({ id, options, installDir, onSaved }) {
+function UpdateOptions({ game, options, onSaved }) {
   const t = useT();
-  const [hours, setHours] = useState(options.server_update_hours);
-  const [folder, setFolder] = useState(options.server_install_dir);
+  const [hours, setHours] = useState(options.update_hours);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null); // { ok, text }
-  const dirty = hours !== options.server_update_hours || folder !== options.server_install_dir;
+  const dirty = hours !== options.update_hours;
 
   const apply = async (values) => {
     setSaving(true);
-    const result = await window.api.setServerUpdates(id, values);
+    const result = await window.api.setServerUpdates(game, values);
     setSaving(false);
     setMessage(result.ok ? { ok: true, text: t('settings.saved') } : { ok: false, text: result.error });
     if (result.ok) await onSaved();
@@ -111,52 +92,48 @@ function UpdateOptions({ id, options, installDir, onSaved }) {
     <Card title={t('settings.steamTitle')} icon={SettingsIcon} description={t('settings.steamDescription')}>
       <div className="space-y-4">
         <Toggle
-          checked={options.server_auto_update}
-          onChange={(value) => apply({ server_auto_update: value })}
+          checked={options.auto_update}
+          onChange={(value) => apply({ auto_update: value })}
           label={t('settings.steamAuto')}
           description={t('settings.steamAutoHint')}
         />
-        <div className="grid grid-cols-3 gap-4">
+        <div className="flex items-end gap-4">
           <Field label={t('settings.steamHours')} hint={t('settings.steamHoursHint')}>
             <NumberInput value={hours} onChange={(value) => { setHours(value); setMessage(null); }} />
           </Field>
-          <div className="col-span-2">
-            <Field label={t('settings.installDir')} hint={t('settings.installDirHint', { path: installDir || '-' })}>
-              <PathInput kind="dir" value={folder} onChange={(value) => { setFolder(value); setMessage(null); }} />
-            </Field>
+          <div className="ml-auto flex items-center gap-3 pb-5">
+            {message && (
+              <span className={`text-xs ${message.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>{message.text}</span>
+            )}
+            <Button variant="primary" icon={Save} loading={saving} disabled={!dirty} onClick={() => apply({ update_hours: hours })}>
+              {t('server.save')}
+            </Button>
           </div>
-        </div>
-        <div className="flex items-center justify-end gap-3">
-          {message && (
-            <span className={`text-xs ${message.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>{message.text}</span>
-          )}
-          <Button variant="primary" icon={Save} loading={saving} disabled={!dirty} onClick={() => apply({ server_update_hours: hours, server_install_dir: folder })}>
-            {t('server.save')}
-          </Button>
         </div>
       </div>
     </Card>
   );
 }
 
-/** Builds of the dedicated server (installed / on Steam), the SteamCMD buttons and the options of the updates. */
-function UpdatesView({ id, g, options, onSaved }) {
+/** The installation shared by the servers: builds (installed / on Steam), the SteamCMD buttons and the options. */
+function InstallationView({ game, host, options, onSaved }) {
   const t = useT();
-  const s = g.details.steam;
-  const run = (action) => window.api.runAction(id, action);
+  const s = host.details.steam;
+  const run = (action) => window.api.runAction(game, 'server', action);
   const available = s.installed && s.latest && s.installed !== s.latest;
   const description = !s.hours ? t('dash.steamManual') : t(s.auto ? 'dash.steamAuto' : 'dash.steamAutoOff', { hours: s.hours });
+  const running = host.details.servers.filter((server) => server.running).length;
   return (
     <div className="space-y-4">
       <Card
-        title={t('dash.steamTitle', { game: GAME[id].name })}
+        title={t('dash.steamTitle', { game: GAME[game].name })}
         icon={HardDriveDownload}
         description={description}
         actions={(
           <div className="flex gap-2">
-            <Button icon={RefreshCw} disabled={g.busy} onClick={() => run('steam-check')} className="py-1 text-xs">{t('dash.steamCheck')}</Button>
-            <Button variant={available ? 'primary' : 'secondary'} icon={HardDriveDownload} disabled={g.busy} onClick={() => run('steam-update')} className="py-1 text-xs">
-              {t('dash.steamUpdate')}
+            <Button icon={RefreshCw} disabled={host.busy} onClick={() => run('steam-check')} className="py-1 text-xs">{t('dash.steamCheck')}</Button>
+            <Button variant={available || !host.details.exeExists ? 'primary' : 'secondary'} icon={HardDriveDownload} disabled={host.busy} onClick={() => run('steam-update')} className="py-1 text-xs">
+              {host.details.exeExists ? t('dash.steamUpdate') : t('servers.install')}
             </Button>
           </div>
         )}
@@ -164,7 +141,12 @@ function UpdatesView({ id, g, options, onSaved }) {
         <div className="grid grid-cols-3 gap-4 text-sm">
           <div>
             <div className="text-xs text-slate-500 dark:text-slate-400">{t('dash.steamInstalled')}</div>
-            <div className={`mt-1 font-medium text-slate-900 dark:text-slate-100 ${s.installed ? 'font-mono' : ''}`}>{s.installed || t('dash.steamUnknown')}</div>
+            <div className="mt-1 flex items-center gap-2 font-medium text-slate-900 dark:text-slate-100">
+              <span className={s.installed ? 'font-mono' : ''}>{s.installed || t('dash.steamUnknown')}</span>
+              {s.installed && s.latest && (available
+                ? <Badge tone="orange">{t('dash.steamAvailable')}</Badge>
+                : <Badge tone="green">{t('dash.steamUpToDate')}</Badge>)}
+            </div>
           </div>
           <div>
             <div className="text-xs text-slate-500 dark:text-slate-400">{t('dash.steamLatest')}</div>
@@ -175,64 +157,147 @@ function UpdatesView({ id, g, options, onSaved }) {
             <div className="mt-1 font-medium text-slate-900 dark:text-slate-100">{s.checkedAt || t('dash.Never')}</div>
           </div>
         </div>
+        <div className="mt-4 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
+          <span className="text-xs text-slate-500 dark:text-slate-400">{t('settings.installDir')}</span>
+          <code className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700 select-text dark:text-slate-300" title={s.installDir}>{s.installDir}</code>
+          <Button variant="ghost" icon={FolderOpen} onClick={() => window.api.servers.open(game, null, 'install')} className="px-2 py-1 text-xs" title={t('servers.openInstall')} />
+        </div>
         {s.phase && (
           <div className="mt-4">
-            <div className="mb-1.5 text-xs text-slate-500 dark:text-slate-400">{g.status}</div>
+            <div className="mb-1.5 text-xs text-slate-500 dark:text-slate-400">{host.status}</div>
             {/* SteamCMD gives no percentage while it runs: an indeterminate bar */}
             <div className="relative h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
               <div className="absolute inset-y-0 w-1/3 animate-slide rounded-full bg-orange-500" />
             </div>
           </div>
         )}
-        {!s.installed && <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">{t('dash.steamUnknownHint')}</p>}
+        <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
+          {running ? t('install.stopsServers', { count: running }) : t('install.noneRunning')}
+        </p>
+        {!s.installed && host.details.exeExists && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('dash.steamUnknownHint')}</p>}
       </Card>
-      <UpdateOptions key={id} id={id} options={options} installDir={s.installDir} onSaved={onSaved} />
+      <UpdateOptions key={game} game={game} options={options} onSaved={onSaved} />
     </div>
   );
 }
 
-/** Server manager of the chosen game: state and controls, live console and updates of the server files. */
-/**
- * tab: 'console' | 'updates' | 'config' (sub-items of Server in the sidebar); options: settings of the game (options of
- * the updates); onSaved reloads them after a change.
- */
-export default function Server({ snapshot, lines, game: id, tab, options, onSaved }) {
-  const t = useT();
-  const g = snapshot.games[id];
-  const d = g.details;
-  const busy = g.busy;
-  const running = d.serverRunning;
-  const run = (action) => window.api.runAction(id, action);
+const TABS = [
+  { id: 'console', icon: SquareTerminal },
+  { id: 'config', icon: FileCog },
+  { id: 'settings', icon: SlidersHorizontal },
+];
 
+/** Page of one server: its state and controls, and its own tabs (console, server_config.sii, settings). */
+function ServerPage({ game, host, server, tab, lines, options, onNavigate, onSaved }) {
+  const t = useT();
+  const settings = options.servers.find((s) => s.id === server.id);
+  const busy = server.busy || Boolean(host.details.steam.phase);
+  const run = (action) => window.api.runAction(game, 'server', action, server.id);
+  const go = (next) => onNavigate(`srv:${server.id}:${next}`);
   return (
-    // the console fills the window (its log scrolls); the other pages scroll as a whole
+    // the console fills the window (its log scrolls); the other tabs scroll as a whole
     <div className={`flex flex-col ${tab === 'console' ? 'h-full' : 'min-h-full'}`}>
-      <PageHeader title={t(`server.title.${tab}`, { game: GAME[id].name })} subtitle={t(`server.subtitle.${tab}`, { game: GAME[id].fullName })}>
-        <Button variant={running ? 'secondary' : 'primary'} icon={Play} disabled={busy || running} onClick={() => run('start')}>{t('console.start')}</Button>
-        <Button icon={Square} disabled={busy || !running} onClick={() => run('stop')}>{t('console.stop')}</Button>
-        <Button icon={RotateCw} disabled={busy} onClick={() => run('restart')}>{t('console.restart')}</Button>
+      <PageHeader title={server.name} subtitle={t(`server.subtitle.${tab}`, { game: GAME[game].fullName })}>
+        {server.running
+          ? <Button icon={Square} disabled={busy} onClick={() => run('stop')}>{t('console.stop')}</Button>
+          : <Button variant="primary" icon={Play} disabled={busy || !server.hasPackages} onClick={() => run('start')}>{t('console.start')}</Button>}
+        <Button icon={RotateCw} disabled={busy || !server.running} onClick={() => run('restart')}>{t('console.restart')}</Button>
+        <Button icon={RefreshCw} disabled={busy} onClick={() => run('update')} title={t('servers.updateTitle')}>{t('servers.update')}</Button>
       </PageHeader>
 
-      <div className={`flex flex-1 flex-col px-8 ${tab === 'console' ? 'min-h-0 pb-8' : tab === 'config' ? '' : 'pb-8'}`}>
-        <div className="mb-4 grid grid-cols-3 gap-4">
-          <Tile icon={Activity} label={t('server.state')}>
-            <StatusDot state={busy ? 'busy' : running ? 'ok' : 'idle'} className="shrink-0" />
-            <span className={`truncate ${running && !busy ? 'text-emerald-700 dark:text-emerald-400' : ''}`} title={busy ? g.status : undefined}>
-              {busy ? g.status : running ? t('console.running') : t('console.stopped')}
-            </span>
-          </Tile>
-          <Tile icon={Tag} label={t('dash.steamInstalled')}>
-            <span className={d.steam.installed ? 'font-mono' : ''}>{d.steam.installed || t('dash.steamUnknown')}</span>
-            <BuildBadge steam={d.steam} />
-          </Tile>
-          <Tile icon={HardDriveDownload} label={t('dash.steamLatest')}>
-            <span className={d.steam.latest ? 'font-mono' : ''}>{d.steam.latest || t('dash.steamNotChecked')}</span>
-          </Tile>
+      <div className={`flex flex-1 flex-col px-8 ${tab === 'console' ? 'min-h-0 pb-8' : ''}`}>
+        <div className="mb-4 flex items-center gap-4 border-b border-slate-200 dark:border-slate-800">
+          <div role="tablist" className="-mb-px flex gap-1">
+            {TABS.map(({ id, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => go(id)}
+                className={`flex cursor-pointer items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                  tab === id
+                    ? 'border-orange-500 text-orange-700 dark:text-orange-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
+                }`}
+              >
+                <Icon className="size-4" />
+                {t(`server.tab.${id}`)}
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto flex min-w-0 items-center gap-2 pb-1 text-xs text-slate-500 dark:text-slate-400">
+            <StatusDot state={server.state} className="shrink-0" />
+            <span className="max-w-72 truncate" title={server.status}>{server.status}</span>
+          </div>
         </div>
+        {!server.hasPackages && tab !== 'settings' && (
+          <p className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            {t('servers.noPackages')}
+          </p>
+        )}
+        {tab === 'console' && <ConsoleView game={game} server={server} lines={lines[`${game}/${server.id}`] || []} />}
+        {tab === 'config' && <ServerConfig key={`${game}/${server.id}`} game={game} server={server} busy={busy} />}
+        {tab === 'settings' && settings && (
+          <ServerSettings
+            key={`${game}/${server.id}`}
+            game={game}
+            server={settings}
+            running={server.running}
+            busy={busy}
+            onSaved={onSaved}
+            onDeleted={async () => { await onSaved(); onNavigate('server-list'); }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
 
-        {tab === 'console' && <ConsoleView id={id} lines={lines[id] || []} />}
-        {tab === 'updates' && <UpdatesView id={id} g={g} options={options} onSaved={onSaved} />}
-        {tab === 'config' && <ServerConfig key={id} id={id} g={g} />}
+/**
+ * Server role of the chosen game. route: { kind: 'list' } (all the servers and the shared installation) or
+ * { kind: 'server', id, tab } (one server); onNew opens the wizard of a new server; options: the server block of the settings of the
+ * game; onSaved reloads them after a change.
+ */
+export default function Server({ snapshot, lines, game, route, onNavigate, onNew, options, onSaved }) {
+  const t = useT();
+  const host = snapshot.games[game].server;
+  const servers = host.details.servers;
+
+  if (route.kind === 'server') {
+    const server = servers.find((s) => s.id === route.id);
+    const tab = TABS.some((x) => x.id === route.tab) ? route.tab : 'console';
+    return (
+      <ServerPage
+        key={server.id}
+        game={game}
+        host={host}
+        server={server}
+        tab={tab}
+        lines={lines}
+        options={options}
+        onNavigate={onNavigate}
+        onSaved={onSaved}
+      />
+    );
+  }
+
+  return (
+    <div className="min-h-full pb-8">
+      <PageHeader title={t('server.title.list', { game: GAME[game].name })} subtitle={t('server.subtitle.list', { game: GAME[game].fullName })}>
+        {servers.length > 1 && (
+          <>
+            <Button icon={Play} disabled={host.busy} onClick={() => window.api.runAction(game, 'server', 'start-all')}>{t('servers.startAll')}</Button>
+            <Button icon={Square} disabled={host.busy} onClick={() => window.api.runAction(game, 'server', 'stop-all')}>{t('servers.stopAll')}</Button>
+          </>
+        )}
+        <Button variant="primary" icon={Plus} onClick={onNew}>{t('servers.new')}</Button>
+      </PageHeader>
+      <div className="space-y-4 px-8">
+        <ServerList game={game} host={host} onNew={onNew} onOpen={(id, tab) => onNavigate(`srv:${id}:${tab}`)} />
+        {/* the installation shared by the servers, below them */}
+        <InstallationView game={game} host={host} options={options} onSaved={onSaved} />
       </div>
     </div>
   );

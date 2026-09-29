@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import {
-  BookOpen, ChevronDown, FileCog, HardDriveDownload, LayoutDashboard, Loader2, Monitor, Moon, ScrollText, ServerCog,
-  Settings as SettingsIcon, SquareTerminal, Sun,
+  BookOpen, ChevronDown, LayoutDashboard, List, Loader2, Monitor, Moon, Plus, ScrollText, ServerCog,
+  Settings as SettingsIcon, Sun,
 } from 'lucide-react';
 import { StatusDot, STATE_STYLES } from './components/ui';
 import GameSwitcher from './components/GameSwitcher';
 import GitDialog from './components/GitDialog';
+import DestinationChooser from './components/DestinationChooser';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Logs from './pages/Logs';
 import Server from './pages/Server';
+import NewServer from './pages/server/NewServer';
 import Guide from './pages/Guide';
 import UpdateCard, { UpdateBanner } from './components/UpdateCard';
 import { GAME, activeIds } from './games';
@@ -17,16 +19,7 @@ import { I18nProvider, useT } from './i18n';
 
 const NAV = [
   { id: 'dashboard', icon: LayoutDashboard },
-  { // server manager: controls on every sub-page, console and updates as sub-items
-    id: 'server',
-    icon: ServerCog,
-    server: true,
-    children: [
-      { id: 'server-console', icon: SquareTerminal },
-      { id: 'server-updates', icon: HardDriveDownload },
-      { id: 'server-config', icon: FileCog },
-    ],
-  },
+  { id: 'server', icon: ServerCog, server: true }, // the servers of the game: one page each (see ServerNav)
   { id: 'settings', icon: SettingsIcon },
   { id: 'logs', icon: ScrollText },
   { id: 'guide', icon: BookOpen },
@@ -44,6 +37,16 @@ const NAV_IDLE = 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:tex
 
 const MAX_LOGS = 500;
 const MAX_CONSOLE = 2000;
+
+/**
+ * Pages of the server role: 'server-list' (all the servers and the shared installation) and 'srv:<id>:<tab>'
+ * (one server, tab 'console' | 'config' | 'settings'). 'server' and 'server-updates' open the list.
+ */
+export function serverRoute(page) {
+  if (page === 'server' || page === 'server-list' || page === 'server-updates') return { kind: 'list' };
+  const match = /^srv:([^:]+):(\w+)$/.exec(page);
+  return match ? { kind: 'server', id: match[1], tab: match[2] } : null;
+}
 
 function ThemeSwitcher({ value, onChange }) {
   const t = useT();
@@ -68,26 +71,94 @@ function ThemeSwitcher({ value, onChange }) {
   );
 }
 
-/** Sidebar card: mode and status of the chosen game. */
-function GameStatus({ g }) {
-  const t = useT();
-  const style = STATE_STYLES[g ? g.state : 'idle'] || STATE_STYLES.idle;
+/** A line of the sidebar card: status of one role of the game. */
+function RoleLine({ label, role }) {
+  const style = STATE_STYLES[role.state] || STATE_STYLES.idle;
   return (
-    <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-      {g && (
-        <div className="mb-1 text-[11px] font-medium tracking-wide text-slate-400 uppercase dark:text-slate-500">
-          {t(`sidebar.mode.${g.mode}`)}
-        </div>
-      )}
+    <div>
+      <div className="mb-1 text-[11px] font-medium tracking-wide text-slate-400 uppercase dark:text-slate-500">{label}</div>
       <div className={`flex items-center gap-2 text-xs font-medium ${style.text}`}>
-        <StatusDot state={g ? g.state : 'idle'} className="shrink-0" />
-        <span className="truncate" title={g?.status}>{g ? g.status : t('sidebar.notConfigured')}</span>
+        <StatusDot state={role.state} className="shrink-0" />
+        <span className="truncate" title={role.status}>{role.status}</span>
       </div>
     </div>
   );
 }
 
-const GAME_KEY = 'game'; // per-viewer convenience: the game shown at the last visit
+/** Sidebar card: roles and status of the chosen game. */
+function GameStatus({ g }) {
+  const t = useT();
+  return (
+    <div className="space-y-2.5 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+      {g?.client && <RoleLine label={t('sidebar.role.client')} role={g.client} />}
+      {g?.server && <RoleLine label={t('sidebar.role.server')} role={g.server} />}
+      {!g && (
+        <div className={`flex items-center gap-2 text-xs font-medium ${STATE_STYLES.idle.text}`}>
+          <StatusDot state="idle" className="shrink-0" />
+          <span className="truncate">{t('sidebar.notConfigured')}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Sidebar group of the server role: all the servers (and the installation), one item per server with its status. */
+function ServerNav({ host, route, setPage }) {
+  const t = useT();
+  const [open, setOpen] = useState(true);
+  const inside = Boolean(route);
+  useEffect(() => {
+    if (inside) setOpen(true); // entering a Server page (e.g. from the Dashboard) shows its sub-items
+  }, [inside]);
+  const steam = host.details.steam;
+  const updateNews = (steam.installed && steam.latest && steam.installed !== steam.latest) || steam.phase || !host.details.exeExists;
+  const item = (active) => `${NAV_ITEM} py-1.5 ${active ? NAV_ACTIVE : NAV_IDLE}`;
+  return (
+    <div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => {
+          if (!inside) {
+            setPage('server-list');
+            setOpen(true);
+          } else {
+            setOpen(!open);
+          }
+        }}
+        className={`${NAV_ITEM} ${inside && !open ? NAV_ACTIVE : inside ? 'text-slate-900 dark:text-slate-100' : NAV_IDLE}`}
+      >
+        <ServerCog className="size-4" />
+        <span className="flex-1 text-left">{t('nav.server')}</span>
+        <ChevronDown className={`size-4 text-slate-400 transition-transform ${open ? '' : '-rotate-90'}`} />
+      </button>
+      {open && (
+        <div className="mt-1 ml-5 space-y-1 border-l border-slate-200 pl-2 dark:border-slate-800">
+          <button type="button" onClick={() => setPage('server-list')} className={item(route?.kind === 'list')}>
+            <List className="size-3.5" />
+            <span className="flex-1 text-left">{t('nav.server-list')}</span>
+            {updateNews && <span className="size-1.5 rounded-full bg-orange-500" title={t('nav.installNews')} />}
+          </button>
+          {host.details.servers.map((server) => (
+            <button
+              key={server.id}
+              type="button"
+              onClick={() => setPage(`srv:${server.id}:${route?.kind === 'server' ? route.tab : 'console'}`)}
+              className={item(route?.kind === 'server' && route.id === server.id)}
+              title={server.status}
+            >
+              <StatusDot state={server.state} className="mx-0.5 shrink-0 scale-90" />
+              <span className="min-w-0 flex-1 truncate text-left">{server.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// per-viewer convenience: the game shown at the last visit
+const GAME_KEY = 'game';
 
 function savedGame() {
   try {
@@ -101,9 +172,10 @@ export default function App() {
   const [data, setData] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [consoleLines, setConsoleLines] = useState({}); // game id -> lines
+  const [consoleLines, setConsoleLines] = useState({}); // "game/server" -> lines
   const [page, setPage] = useState('dashboard');
   const [game, setGame] = useState(() => (GAME[savedGame()] ? savedGame() : 'ets2')); // game shown in every page
+  const [choice, setChoice] = useState(null); // an export waiting for the choice of the server
   const [theme, setTheme] = useState('system');
   const [language, setLanguage] = useState('system');
   const [locale, setLocale] = useState('en');
@@ -120,21 +192,31 @@ export default function App() {
       setLanguage(state.settings.language || 'system');
       setLocale(state.locale);
       setGit(state.git);
-      // the Client mode cannot work without Git: say it right away
-      if (!state.git.found && Object.values(state.settings.games).some((g) => g.mode === 'client')) setGitOpen(true);
+      // the client role cannot work without Git: say it right away
+      if (!state.git.found && Object.values(state.settings.games).some((g) => g.client.enabled)) setGitOpen(true);
       if (!state.configured) setPage('settings');
       // first visit: show a game in use
       const used = activeIds(state.snapshot);
       if (!GAME[savedGame()] && used.length) setGame(used[0]);
+      // an export was waiting for its server while the window was not open
+      const waiting = Object.entries(state.choices || {})[0];
+      if (waiting) {
+        setChoice({ game: waiting[0], ...waiting[1] });
+        setGame(waiting[0]);
+      }
     });
     const offs = [
       window.api.onState(setSnapshot),
       window.api.onLog((line) => setLogs((prev) => [...prev.slice(-(MAX_LOGS - 1)), line])),
-      window.api.onConsole(({ game: id, reset, lines }) => setConsoleLines((prev) => ({
-        ...prev,
-        [id]: (reset ? lines : [...(prev[id] || []), ...lines]).slice(-MAX_CONSOLE),
-      }))),
+      window.api.onConsole(({ game: id, server, reset, lines }) => setConsoleLines((prev) => {
+        const key = `${id}/${server}`;
+        return { ...prev, [key]: (reset ? lines : [...(prev[key] || []), ...lines]).slice(-MAX_CONSOLE) };
+      })),
       window.api.onNavigate(setPage),
+      window.api.onChooseDestination((request) => {
+        setChoice(request);
+        setGame(request.game);
+      }),
     ];
     return () => offs.forEach((off) => off());
   }, []);
@@ -180,6 +262,7 @@ export default function App() {
   return (
     <I18nProvider value={locale}>
       {gitOpen && <GitDialog git={git} onChecked={setGit} onClose={() => setGitOpen(false)} />}
+      {choice && <DestinationChooser key={choice.game} request={choice} onDone={() => setChoice(null)} />}
       <Layout
         git={git}
         onGitHelp={() => setGitOpen(true)}
@@ -206,17 +289,12 @@ function Layout({
 }) {
   const t = useT();
   const g = snapshot.games[game];
-  const isServer = g?.mode === 'server';
-  // 'server' (e.g. from the Dashboard) opens the console; the Server pages exist only in Server mode
-  const wanted = page === 'server' ? 'server-console' : page;
-  const current = wanted.startsWith('server-') && !isServer ? 'dashboard' : wanted;
-  const onServerPage = current.startsWith('server-');
-  const [serverOpen, setServerOpen] = useState(true);
-  useEffect(() => {
-    if (onServerPage) setServerOpen(true); // entering a Server page (e.g. from the Dashboard) shows its sub-items
-  }, [onServerPage]);
-  const steam = isServer ? g.details.steam : null;
-  const updateNews = steam && ((steam.installed && steam.latest && steam.installed !== steam.latest) || steam.phase);
+  const host = g?.server || null;
+  // the Server pages exist only with the server role, and a removed server falls back to the list
+  let route = host ? serverRoute(page) : null;
+  if (route?.kind === 'server' && !host.details.servers.some((s) => s.id === route.id)) route = { kind: 'list' };
+  const current = route ? 'server' : page.startsWith('srv:') || page.startsWith('server') ? 'dashboard' : page;
+  const [creating, setCreating] = useState(false); // wizard of a new server, from the sidebar or the list of servers
 
   return (
     <div className="flex h-full">
@@ -224,41 +302,17 @@ function Layout({
         <GameSwitcher value={game} onChange={setGame} snapshot={snapshot} />
 
         <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
-          {NAV.filter((item) => !item.server || isServer).map(({ id, icon: Icon, children }) => (children ? (
-            <div key={id}>
+          {NAV.filter((item) => !item.server || host).map(({ id, icon: Icon }) => (id === 'server' ? (
+            <div key={id} className="space-y-1">
               <button
                 type="button"
-                aria-expanded={serverOpen}
-                onClick={() => {
-                  if (!onServerPage) {
-                    setPage(children[0].id);
-                    setServerOpen(true);
-                  } else {
-                    setServerOpen(!serverOpen);
-                  }
-                }}
-                className={`${NAV_ITEM} ${onServerPage && !serverOpen ? NAV_ACTIVE : onServerPage ? 'text-slate-900 dark:text-slate-100' : NAV_IDLE}`}
+                onClick={() => setCreating(true)}
+                className={`${NAV_ITEM} border border-dashed border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-500/40 dark:text-orange-400 dark:hover:bg-orange-500/10`}
               >
-                <Icon className="size-4" />
-                <span className="flex-1 text-left">{t(`nav.${id}`)}</span>
-                <ChevronDown className={`size-4 text-slate-400 transition-transform ${serverOpen ? '' : '-rotate-90'}`} />
+                <Plus className="size-4" />
+                {t('nav.server-new')}
               </button>
-              {serverOpen && (
-                <div className="mt-1 ml-5 space-y-1 border-l border-slate-200 pl-2 dark:border-slate-800">
-                  {children.map(({ id: childId, icon: ChildIcon }) => (
-                    <button
-                      key={childId}
-                      type="button"
-                      onClick={() => setPage(childId)}
-                      className={`${NAV_ITEM} py-1.5 ${current === childId ? NAV_ACTIVE : NAV_IDLE}`}
-                    >
-                      <ChildIcon className="size-3.5" />
-                      <span className="flex-1 text-left">{t(`nav.${childId}`)}</span>
-                      {childId === 'server-updates' && updateNews && <span className="size-1.5 rounded-full bg-orange-500" />}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <ServerNav host={host} route={route} setPage={setPage} />
             </div>
           ) : (
             <button key={id} type="button" onClick={() => setPage(id)} className={`${NAV_ITEM} ${current === id ? NAV_ACTIVE : NAV_IDLE}`}>
@@ -277,7 +331,7 @@ function Layout({
 
       <main className="min-w-0 flex-1 overflow-y-auto">
         <UpdateBanner />
-        {current === 'dashboard' && <Dashboard data={data} snapshot={snapshot} logs={logs} game={game} onNavigate={setPage} git={git} onGitHelp={onGitHelp} />}
+        {current === 'dashboard' && <Dashboard data={data} snapshot={snapshot} logs={logs} game={game} onNavigate={setPage} onNewServer={() => setCreating(true)} git={git} onGitHelp={onGitHelp} />}
         {current === 'settings' && (
           <Settings
             data={data}
@@ -290,17 +344,26 @@ function Layout({
         )}
         {current === 'logs' && <Logs logs={logs} />}
         {current === 'guide' && <Guide />}
-        {onServerPage && (
+        {route && (
           <Server
             snapshot={snapshot}
             lines={consoleLines}
             game={game}
-            tab={current.slice('server-'.length)}
-            options={data.settings.games[game]}
+            route={route}
+            onNavigate={setPage}
+            onNew={() => setCreating(true)}
+            options={data.settings.games[game].server}
             onSaved={onSaved}
           />
         )}
       </main>
+      {creating && host && (
+        <NewServer
+          game={game}
+          onClose={() => setCreating(false)}
+          onCreated={async (id) => { setCreating(false); await onSaved(); setPage(`srv:${id}:config`); }}
+        />
+      )}
     </div>
   );
 }

@@ -9,16 +9,26 @@ const subscribe = (channel) => (callback) => {
 
 contextBridge.exposeInMainWorld('api', {
   getState: () => ipcRenderer.invoke('get-state'),
-  saveSettings: (values, autostart) => ipcRenderer.invoke('save-settings', values, autostart),
-  runAction: (game, id) => ipcRenderer.invoke('run-action', game, id),
+  // imported: ids of the games whose servers come from an imported settings file
+  saveSettings: (values, autostart, imported) => ipcRenderer.invoke('save-settings', values, autostart, imported),
+  // role: 'client' | 'server'; server: id of a server for the actions of one server
+  runAction: (game, role, id, server) => ipcRenderer.invoke('run-action', game, role, id, server),
+  chooseDestination: (game, id) => ipcRenderer.invoke('choose-destination', game, id),
   setServerUpdates: (game, values) => ipcRenderer.invoke('set-server-updates', game, values),
+  servers: {
+    plan: (game, name) => ipcRenderer.invoke('server-plan', game, name),
+    create: (game, form) => ipcRenderer.invoke('server-create', game, form),
+    save: (game, id, values) => ipcRenderer.invoke('server-save', game, id, values),
+    remove: (game, id, removeFiles) => ipcRenderer.invoke('server-delete', game, id, removeFiles),
+    // what: 'home' | 'config' | 'console' of a server, 'install' for the installation of the game
+    open: (game, id, what) => ipcRenderer.invoke('open-path', game, id, what),
+  },
   browse: (kind, current) => ipcRenderer.invoke('browse', kind, current),
   openLogFile: () => ipcRenderer.invoke('open-log-file'),
-  openConsoleFile: (game) => ipcRenderer.invoke('open-console-file', game),
   serverConfig: {
-    read: (game) => ipcRenderer.invoke('server-config-read', game),
-    write: (game, values, moderators, restart) => ipcRenderer.invoke('server-config-write', game, values, moderators, restart),
-    open: (game) => ipcRenderer.invoke('open-server-config', game),
+    read: (game, id) => ipcRenderer.invoke('server-config-read', game, id),
+    write: (game, id, values, moderators, restart) => ipcRenderer.invoke('server-config-write', game, id, values, moderators, restart),
+    create: (game, id) => ipcRenderer.invoke('server-config-create', game, id),
   },
   steamProfiles: (ids) => ipcRenderer.invoke('steam-profiles', ids),
   steamResolve: (input) => ipcRenderer.invoke('steam-resolve', input),
@@ -33,6 +43,7 @@ contextBridge.exposeInMainWorld('api', {
   onLog: subscribe('log'),
   onConsole: subscribe('console'),
   onUpdate: subscribe('update'),
+  onChooseDestination: subscribe('choose-destination'),
   update: {
     state: () => ipcRenderer.invoke('update-state'),
     check: () => ipcRenderer.invoke('update-check'),

@@ -3,16 +3,15 @@ import Shot from './Shot';
 export default function GuideIt() {
   return (
     <>
-      <p>Questa guida spiega passo per passo come configurare <strong>ETS2 Package Sync</strong> sul PC da cui esporti i pacchetti (<strong>Client</strong>) e sul PC che fa girare il server dedicato (<strong>Server</strong>).</p>
-      <p>L&#39;app gestisce sia <strong>Euro Truck Simulator 2</strong> (ETS2) sia <strong>American Truck Simulator</strong> (ATS), anche insieme sullo stesso PC: ogni gioco ha modalità e repository propri. I passi sono gli stessi per i due giochi; dove cambia qualcosa è indicato.</p>
-      <p>Alla fine, ogni volta che esporti i pacchetti dal gioco, il server dedicato si aggiornerà e si riavvierà da solo.</p>
-      <pre><code>{`PC Client (giochi tu)        GitHub                  PC Server (server dedicato)
-export_server_packages  -->  repository  <--controlla--  scarica i file, ferma ETS2,
-l'app fa il push                          (o webhook)     sostituisce, riavvia ETS2`}</code></pre>
+      <p>Questa guida spiega passo per passo come configurare <strong>ETS2 Package Sync</strong> sul PC da cui esporti i pacchetti (<strong>Client</strong>) e sul PC che fa girare i server dedicati (<strong>Server</strong>). Lo stesso PC può fare anche tutte e due le cose.</p>
+      <p>L&#39;app gestisce sia <strong>Euro Truck Simulator 2</strong> (ETS2) sia <strong>American Truck Simulator</strong> (ATS). Sul PC Server può <strong>creare e far girare più server</strong> dello stesso gioco con una sola installazione: ogni server ha la sua cartella home (configurazione, pacchetti, log) e la sua repository GitHub. Quando esporti i pacchetti dal gioco, scegli a quale server mandarli.</p>
+      <pre><code>{`PC Client (giochi tu)            GitHub              PC Server (una installazione)
+export_server_packages  -->  repo "EU Convoy"  <--  server "EU Convoy"  (-homedir ...\\eu-convoy)
+scegli il server             repo "Scuola"     <--  server "Scuola"     (-homedir ...\\scuola)`}</code></pre>
       <h2 id="indice">Indice</h2>
       <ol>
       <li><a href="#1-cosa-serve">Cosa serve</a></li>
-      <li><a href="#2-creare-la-repository-su-github">Creare la repository su GitHub</a></li>
+      <li><a href="#2-creare-le-repository-su-github">Creare le repository su GitHub</a></li>
       <li><a href="#3-installare-lapp">Installare l&#39;app</a></li>
       <li><a href="#4-configurare-il-client">Configurare il Client</a></li>
       <li><a href="#5-configurare-il-server">Configurare il Server</a></li>
@@ -20,8 +19,8 @@ l'app fa il push                          (o webhook)     sostituisce, riavvia E
       <li><a href="#7-creare-il-webhook-su-github">Creare il webhook su GitHub</a> (solo webhook)</li>
       <li><a href="#8-token-per-repository-private">Token per repository private</a></li>
       <li><a href="#9-prova-completa">Prova completa</a></li>
-      <li><a href="#10-pagina-server">Pagina Server: controllo, console e aggiornamenti</a></li>
-      <li><a href="#11-aggiornare-lapp">Aggiornare l&#39;app</a></li>
+      <li><a href="#10-pagina-server">Le pagine Server</a></li>
+      <li><a href="#11-aggiornare-lapp">Aggiornare l&#39;app (e passare dalla 4.x alla 5)</a></li>
       <li><a href="#12-problemi-comuni">Problemi comuni</a></li>
       </ol>
       <hr />
@@ -39,22 +38,19 @@ l'app fa il push                          (o webhook)     sostituisce, riavvia E
       </tr>
       <tr>
       <td>PC Client</td>
-      <td>ETS2 installato, <a href="https://git-scm.com/download/win">Git for Windows</a></td>
+      <td>ETS2 o ATS installato, <a href="https://git-scm.com/download/win">Git for Windows</a></td>
       </tr>
       <tr>
       <td>PC Server</td>
-      <td>Il server dedicato di ETS2 già funzionante (con il suo <code>server_config.sii</code> e il <code>server_logon_token</code> di Steam). Solo se usi il webhook: la possibilità di aprire una porta sul router</td>
+      <td>Qualche GB liberi su disco: il server dedicato lo scarica l&#39;app con SteamCMD (va bene anche un&#39;installazione che hai già). Un <code>server_logon_token</code> di Steam per ogni server. Solo se usi il webhook: la possibilità di aprire una porta sul router</td>
       </tr>
       </tbody></table>
-      <blockquote>
-      <p>Prima di usare l&#39;app, verifica che il server dedicato parta correttamente da solo (doppio clic su <code>eurotrucks2_server.exe</code> per ETS2 o <code>amtrucks_server.exe</code> per ATS). L&#39;app lo avvia e lo ferma, ma non può correggere una configurazione del gioco sbagliata.</p>
-      </blockquote>
-      <h2 id="2-creare-la-repository-su-github">2. Creare la repository su GitHub</h2>
-      <p>La repository è il &quot;punto d&#39;incontro&quot; tra Client e Server: contiene solo i due file dei pacchetti.</p>
+      <h2 id="2-creare-le-repository-su-github">2. Creare le repository su GitHub</h2>
+      <p>Ogni server ha la sua repository: è il &quot;punto d&#39;incontro&quot; tra Client e quel server e contiene solo i due file dei pacchetti. Con tre server crei tre repository. Per ognuna:</p>
       <ol>
       <li><p>Su GitHub clicca <strong>+</strong> in alto a destra → <strong>New repository</strong>.</p>
       </li>
-      <li><p><strong>Repository name</strong>: ad esempio <code>ets2-server-packages</code> (per ATS una seconda repository, es. <code>ats-server-packages</code>).</p>
+      <li><p><strong>Repository name</strong>: un nome che ricordi il server, ad esempio <code>ets2-eu-convoy</code>.</p>
       </li>
       <li><p>Scegli <strong>Private</strong> (consigliato) o <em>Public</em>.</p>
       </li>
@@ -70,82 +66,53 @@ server_packages.dat binary`}</code></pre>
       <Shot name="github-gitattributes" alt="Creazione del file .gitattributes" />
       </li>
       </ol>
-      <p>Annota l&#39;indirizzo della repository (es. <code>https://github.com/tuo-utente/ets2-server-packages</code>) e il nome del branch (di solito <strong><code>main</code></strong>): servono sia sul Client che sul Server. Se usi entrambi i giochi, ripeti questi passi per la repository di ATS: ogni gioco deve avere la sua repository (o almeno un branch diverso).</p>
+      <p>Annota l&#39;indirizzo di ogni repository (es. <code>https://github.com/tuo-utente/ets2-eu-convoy</code>) e il branch (di solito <strong><code>main</code></strong>): servono sia sul Client che sul Server.</p>
       <h2 id="3-installare-lapp">3. Installare l&#39;app</h2>
-      <p>Su <strong>entrambi</strong> i PC:</p>
+      <p>Su <strong>entrambi</strong> i PC (o una volta sola, se Client e Server sono lo stesso PC):</p>
       <ol>
       <li>Esegui <code>ETS2PackageSync-Setup-&lt;versione&gt;.exe</code>.</li>
       <li>Se compare <em>&quot;Windows ha protetto il PC&quot;</em>: <strong>Ulteriori informazioni</strong> → <strong>Esegui comunque</strong> (l&#39;installer non è firmato digitalmente).</li>
-      <li>Scegli la cartella e completa l&#39;installazione. L&#39;app si avvia da sola.</li>
+      <li>Scegli la cartella e completa l&#39;installazione. L&#39;app si avvia da sola e apre la pagina <strong>Impostazioni</strong>.</li>
       </ol>
-      <p>Al primo avvio si apre la pagina <strong>Impostazioni</strong> con la modalità dei giochi ancora da scegliere:</p>
-      <Shot name="primo-avvio" alt="Primo avvio: pagina Settings" />
+      <p>In alto a sinistra scegli il gioco (<strong>Euro Truck Simulator 2</strong> o <strong>American Truck Simulator</strong>): tutte le pagine mostrano il gioco scelto. Nella scheda <strong>su questo PC</strong> attiva il ruolo <strong>Client</strong>, il ruolo <strong>Server</strong> o tutti e due.</p>
+      <Shot name="roles" alt="Ruoli del gioco su questo PC" />
       <blockquote>
-      <p><strong>Hai già configurato l&#39;app su un altro PC?</strong> Lì apri <strong>Impostazioni → Esporta</strong> e salva il file; qui apri <strong>Impostazioni → Importa</strong> e scegli quel file. Il modulo viene compilato ma non salvato: controlla i percorsi (cartelle ed eseguibile possono essere diversi su questo PC) e clicca <strong>Salva impostazioni</strong>.</p>
-      <p>All&#39;export l&#39;app chiede se includere webhook secret e token GitHub: nel file sono <strong>in chiaro</strong>, quindi includili solo per spostare la configurazione e non condividere il file. Senza secret, l&#39;import mantiene quelli già presenti su questo PC. Tema, lingua e <em>Avvia con Windows</em> non vengono copiati.</p>
+      <p><strong>Hai già configurato l&#39;app su un altro PC?</strong> Lì apri <strong>Impostazioni → Esporta</strong> e salva il file; qui apri <strong>Impostazioni → Importa</strong> e scegli quel file. Il modulo viene compilato ma non salvato: controlla i percorsi (possono essere diversi su questo PC) e clicca <strong>Salva impostazioni</strong>. Anche l&#39;elenco dei server viene importato: copia le loro cartelle home o creane di nuove.</p>
+      <p>All&#39;export l&#39;app chiede se includere webhook secret e token GitHub: nel file sono <strong>in chiaro</strong>, quindi includili solo per spostare la configurazione e non condividere il file.</p>
       </blockquote>
-      <p>Chiudendo la finestra l&#39;app <strong>non</strong> si chiude: resta nell&#39;area di notifica (tray), vicino all&#39;orologio. Clic sull&#39;icona per riaprirla, tasto destro per il menu rapido. Il pallino sull&#39;icona indica lo stato: verde ok, blu operazione in corso, rosso errore, grigio non configurato. Con due giochi in uso, il menu ha un sottomenu per ciascuno e il pallino mostra lo stato peggiore dei due.</p>
-      <p>La lingua dell&#39;app si cambia in <strong>Impostazioni → Generale → Lingua</strong>: <strong>Automatica</strong> segue la lingua di Windows, <strong>English</strong> e <strong>Italiano</strong> la fissano. Si applica subito, senza salvare.</p>
+      <p>Chiudendo la finestra l&#39;app <strong>non</strong> si chiude: resta nell&#39;area di notifica (tray), vicino all&#39;orologio. Clic sull&#39;icona per riaprirla, tasto destro per il menu rapido (con un sottomenu per ogni server). Il pallino sull&#39;icona indica lo stato: verde ok, blu operazione in corso, rosso errore, grigio non configurato.</p>
+      <p>La lingua dell&#39;app si cambia in <strong>Impostazioni → Generale → Lingua</strong>.</p>
       <hr />
       <h2 id="4-configurare-il-client">4. Configurare il Client</h2>
       <p>Il Client è il PC su cui giochi ed esporti i pacchetti.</p>
       <h3 id="41-git-for-windows">4.1 Git for Windows</h3>
       <p>Installa <a href="https://git-scm.com/download/win">Git for Windows</a> lasciando le opzioni predefinite. L&#39;app lo usa per fare il push: non devi clonare nulla a mano e non serve nessun token, le credenziali le gestisce Git.</p>
-      <p>Se Git manca, quando scegli la modalità <strong>Client</strong> (e a ogni avvio) compare il popup <strong>Git non rilevato</strong>: <strong>Scarica Git for Windows</strong> apre la pagina di download; dopo l&#39;installazione clicca <strong>Ricontrolla</strong> e la modalità Client parte subito, senza riavviare l&#39;app.</p>
-      <h3 id="42-modalità">4.2 Modalità</h3>
-      <p>In alto a sinistra clicca sul nome del gioco e scegli <strong>Euro Truck Simulator 2</strong> o <strong>American Truck Simulator</strong>: Dashboard, Server e Impostazioni mostrano sempre il gioco scelto. Poi in <strong>Impostazioni</strong> scegli <strong>Client</strong>. In <strong>Generale</strong> attiva <strong>Avvia con Windows</strong> se vuoi che l&#39;app parta da sola all&#39;accesso (si avvia ridotta nel tray).</p>
-      <Shot name="client-modalita" alt="Modalità Client" />
-      <h3 id="43-repository">4.3 Repository</h3>
-      <p>Nella scheda <strong>Repository GitHub</strong>:</p>
-      <table>
-      <thead>
-      <tr>
-      <th>Campo</th>
-      <th>Valore</th>
-      </tr>
-      </thead>
-      <tbody><tr>
-      <td>URL della repository</td>
-      <td>l&#39;indirizzo della repository, es. <code>https://github.com/tuo-utente/ets2-server-packages</code></td>
-      </tr>
-      <tr>
-      <td>Branch</td>
-      <td><code>main</code> (o il branch della tua repository)</td>
-      </tr>
-      <tr>
-      <td>File SII / DAT nella repository</td>
-      <td>lascia <code>server_packages.sii</code> e <code>server_packages.dat</code></td>
-      </tr>
-      </tbody></table>
-      <Shot name="repository" alt="Scheda GitHub repository" />
-      <blockquote>
-      <p>Il branch predefinito è <code>master</code>: le repository nuove di GitHub usano <code>main</code>, quindi controllalo.</p>
-      </blockquote>
-      <h3 id="44-cartella-del-gioco">4.4 Cartella del gioco</h3>
-      <p>Nella scheda <strong>Client ETS2</strong>, <strong>Cartella documenti di ETS2</strong> è già compilata con <code>Documenti\Euro Truck Simulator 2</code> (per ATS <code>Documenti\American Truck Simulator</code>): è la cartella in cui il gioco scrive i file esportati (quella con <code>profiles</code>, <code>config.cfg</code>, <code>game.log.txt</code>). Cambiala solo se il gioco usa un&#39;altra cartella.</p>
-      <p>In <em>Opzioni avanzate</em> puoi cambiare il messaggio dei commit e quanti secondi aspettare dopo l&#39;ultima modifica dei file prima del push.</p>
-      <Shot name="client-impostazioni" alt="Scheda Client" />
-      <h3 id="45-salvare">4.5 Salvare</h3>
-      <p>Clicca <strong>Salva impostazioni</strong> in basso a destra. La Dashboard mostra lo stato <strong>In ascolto - in attesa di export_server_packages</strong>: è normale, l&#39;app è pronta e aspetta il primo export.</p>
+      <p>Se Git manca, quando attivi il ruolo <strong>Client</strong> compare il popup <strong>Git non rilevato</strong>: <strong>Scarica Git for Windows</strong> apre la pagina di download; dopo l&#39;installazione clicca <strong>Ricontrolla</strong>, senza riavviare l&#39;app.</p>
+      <h3 id="42-cartella-del-gioco">4.2 Cartella del gioco</h3>
+      <p>Nella scheda <strong>Client ETS2</strong>, <strong>Cartella documenti</strong> vuota vuol dire <code>Documenti\Euro Truck Simulator 2</code> (per ATS <code>Documenti\American Truck Simulator</code>): è la cartella in cui il gioco scrive i file esportati. Cambiala solo se il gioco usa un&#39;altra cartella.</p>
+      <h3 id="43-server-a-cui-inviare">4.3 Server a cui inviare</h3>
+      <p>Nella scheda <strong>Server a cui inviare</strong> clicca <strong>Aggiungi server</strong> per ogni server e compila <strong>nome</strong>, <strong>URL della repository</strong> e <strong>branch</strong> (spesso <code>main</code>: quello predefinito è <code>master</code>, controllalo). Usa le stesse repository che userà il PC Server.</p>
+      <Shot name="client-destinations" alt="Server a cui inviare" />
+      <p>Clicca <strong>Salva impostazioni</strong>. La Dashboard mostra lo stato <strong>In ascolto</strong> e l&#39;elenco dei server, ognuno con il suo pulsante <strong>Push</strong>.</p>
       <Shot name="client-dashboard" alt="Dashboard del Client" />
-      <p>Il riquadro <em>Percorso dei file</em> riassume il percorso dei file: cartella del gioco → clone temporaneo (cancellato dopo ogni push) → GitHub.</p>
-      <h3 id="46-primo-push">4.6 Primo push</h3>
+      <h3 id="44-primo-export">4.4 Primo export e scelta del server</h3>
       <ol>
-      <li>Avvia ETS2, apri la console (tasto <code>~</code>, se l&#39;hai abilitata) e scrivi <code>export_server_packages</code>.</li>
-      <li>Dopo pochi secondi l&#39;app clona la repository, copia i file e fa il push.</li>
-      <li><strong>Solo la prima volta</strong> si apre la finestra di accesso di GitHub (Git Credential Manager): accedi con l&#39;account che ha accesso in scrittura alla repository. Le credenziali restano salvate in Windows.</li>
-      <li>Su GitHub, nella repository, compaiono <code>server_packages.sii</code> e <code>server_packages.dat</code>.</li>
+      <li>Avvia il gioco, apri la console (tasto <code>~</code>, se l&#39;hai abilitata) e scrivi <code>export_server_packages</code>.</li>
+      <li>Con <strong>un solo server</strong> l&#39;app invia subito i file alla sua repository. Con <strong>più server</strong> compare la finestra <strong>Nuovo export</strong>: scegli il server e clicca <strong>Invia</strong> (doppio clic per fare prima). È già selezionato il server dell&#39;ultima volta. Se il gioco è a schermo intero, la finestra lampeggia nella barra delle applicazioni e arriva una notifica.</li>
+      <li><strong>Solo la prima volta</strong> si apre la finestra di accesso di GitHub (Git Credential Manager): accedi con l&#39;account che può scrivere nelle repository.</li>
+      <li>Su GitHub, nella repository del server scelto, compaiono <code>server_packages.sii</code> e <code>server_packages.dat</code>.</li>
       </ol>
-      <p>Il pulsante <strong>Push ora</strong> rifà subito il controllo, <strong>Apri repository</strong> apre la repository nel browser.</p>
+      <Shot name="choose-server" alt="Scelta del server dopo un export" />
+      <p>Con <strong>Non inviare</strong> l&#39;export resta sul PC: lo invii quando vuoi con <strong>Push</strong> accanto al server nella Dashboard.</p>
       <hr />
       <h2 id="5-configurare-il-server">5. Configurare il Server</h2>
-      <p>Il Server è il PC dove gira il server dedicato di ETS2.</p>
-      <h3 id="51-modalità-e-repository">5.1 Modalità e repository</h3>
-      <p>Scegli il gioco in alto a sinistra e poi, in <strong>Impostazioni</strong>, <strong>Server</strong>. In <strong>Generale</strong>, se vuoi, attiva <strong>Avvia con Windows</strong> (consigliato su un server sempre acceso).</p>
-      <Shot name="server-modalita" alt="Modalità Server" />
-      <p>Compila la scheda <strong>Repository GitHub</strong> con <strong>gli stessi valori del Client</strong> (URL e branch).</p>
-      <h3 id="52-server-dedicato">5.2 Server dedicato</h3>
-      <p>Nella scheda <strong>Server dedicato ETS2</strong> (o <strong>Server dedicato ATS</strong>):</p>
+      <p>Il Server è il PC dove girano i server dedicati.</p>
+      <h3 id="51-ruolo-e-installazione">5.1 Ruolo Server e installazione</h3>
+      <p>In <strong>Impostazioni</strong> attiva il ruolo <strong>Server</strong>. Nella scheda <strong>Installazione del server dedicato</strong> c&#39;è la cartella dove l&#39;app installa il server dedicato con SteamCMD (proposta: <code>ETS2 Package Sync\ETS2\installation</code> nella cartella del tuo utente, fuori da Documenti). Se il server dedicato è già installato, indica la sua cartella (quella che contiene <code>bin\win_x64</code>). In <strong>Generale</strong> attiva <strong>Avvia con Windows</strong>, consigliato su un PC sempre acceso.</p>
+      <Shot name="server-install" alt="Installazione del server dedicato" />
+      <p>Tutti i server del gioco usano questa installazione: ognuno viene avviato con <code>-nosingle -homedir &quot;&lt;sua cartella home&gt;&quot;</code>, quindi legge configurazione e pacchetti dalla sua cartella e non da Documenti.</p>
+      <h3 id="52-creare-un-server">5.2 Creare un server</h3>
+      <p>Clicca <strong>Nuovo server</strong> nella barra laterale (o in <strong>Server → Tutti i server</strong>) e compila:</p>
       <table>
       <thead>
       <tr>
@@ -154,59 +121,35 @@ server_packages.dat binary`}</code></pre>
       </tr>
       </thead>
       <tbody><tr>
-      <td>Eseguibile del server ETS2 / ATS</td>
-      <td><code>eurotrucks2_server.exe</code> (ATS: <code>amtrucks_server.exe</code>), di solito in <code>...\bin\win_x64\</code> della cartella del server</td>
+      <td>Nome</td>
+      <td>il nome del server, es. <code>EU Convoy</code>: diventa anche il nome della sessione</td>
       </tr>
       <tr>
-      <td>server_packages.sii usato dal server</td>
-      <td>il file <code>server_packages.sii</code> che il server legge, di solito in <code>Documenti\Euro Truck Simulator 2</code> (o <code>American Truck Simulator</code>) dell&#39;utente che avvia il server</td>
+      <td>Cartella home</td>
+      <td>proposta dall&#39;app (<code>...\ETS2 Package Sync\ETS2\servers\eu-convoy</code>): qui vanno <code>server_config.sii</code>, i pacchetti e <code>server.log.txt</code></td>
       </tr>
       <tr>
-      <td>server_packages.dat usato dal server</td>
-      <td>lo stesso per il <code>.dat</code></td>
+      <td>Repository e branch</td>
+      <td>la repository di questo server (sezione 2)</td>
+      </tr>
+      <tr>
+      <td>Token di login del server</td>
+      <td>il <code>server_logon_token</code> di Steam, uno per ogni server: <strong>Pagina di Steam</strong> apre la pagina dove crearlo (App ID <code>227300</code> per ETS2, <code>270880</code> per ATS). Si può aggiungere anche dopo</td>
+      </tr>
+      <tr>
+      <td>Password, giocatori massimi</td>
+      <td>facoltativi, modificabili dopo in <strong>Configurazione</strong></td>
+      </tr>
+      <tr>
+      <td>Primi pacchetti</td>
+      <td><em>Aspetta il primo export del Client</em>, oppure copiali da un altro server o dall&#39;ultimo export del gioco su questo PC</td>
       </tr>
       </tbody></table>
-      <p>Usa <strong>Sfoglia</strong> per selezionarli senza sbagliare il percorso.</p>
-      <Shot name="server-ets2" alt="Scheda ETS2 dedicated server" />
-      <p><em>Opzioni avanzate</em> (di solito si possono lasciare vuote/predefinite):</p>
-      <table>
-      <thead>
-      <tr>
-      <th>Campo</th>
-      <th>A cosa serve</th>
-      </tr>
-      </thead>
-      <tbody><tr>
-      <td>Cartella di lavoro</td>
-      <td>cartella da cui avviare il server. Vuoto = cartella dell&#39;eseguibile</td>
-      </tr>
-      <tr>
-      <td>Argomenti da riga di comando</td>
-      <td>argomenti extra per l&#39;eseguibile del server</td>
-      </tr>
-      <tr>
-      <td>Cartella dei backup</td>
-      <td>dove salvare i file precedenti prima di ogni aggiornamento. Vuoto = <code>backups</code> accanto al <code>.sii</code></td>
-      </tr>
-      <tr>
-      <td>Backup da conservare</td>
-      <td>quanti backup conservare</td>
-      </tr>
-      <tr>
-      <td>Timeout di arresto</td>
-      <td>secondi di attesa per la chiusura di ETS2</td>
-      </tr>
-      <tr>
-      <td>Controllo all&#39;avvio</td>
-      <td>ETS2 deve restare acceso almeno questi secondi dopo l&#39;avvio, altrimenti l&#39;aggiornamento viene annullato e si torna ai file precedenti. 0 = disattivato</td>
-      </tr>
-      <tr>
-      <td>File di log del server</td>
-      <td>il log mostrato in <strong>Server → Console</strong>. Vuoto = <code>server.log.txt</code> accanto al <code>.sii</code></td>
-      </tr>
-      </tbody></table>
+      <Shot name="server-new" alt="Nuovo server" />
+      <p>L&#39;app crea la cartella home con un <code>server_config.sii</code> completo e <strong>porte libere</strong> su questo PC (diverse da quelle degli altri server, anche dell&#39;altro gioco). Le porte proposte si vedono e si cambiano in <em>Opzioni avanzate</em>. Se il server dedicato non è ancora installato, con <strong>Installalo adesso</strong> parte il download con SteamCMD.</p>
+      <p>Il nuovo server compare nella barra laterale sotto <strong>Server</strong>, con il suo pallino di stato: cliccalo per aprire la sua pagina (sezione 10).</p>
       <h3 id="53-nuovi-pacchetti">5.3 Controllo periodico o webhook</h3>
-      <p>Nella scheda <strong>Nuovi pacchetti da GitHub</strong> scegli come il Server scopre che il Client ha inviato nuovi pacchetti:</p>
+      <p>Nella scheda <strong>Nuovi pacchetti da GitHub</strong> scegli come il Server scopre che il Client ha inviato nuovi pacchetti alla repository di uno dei suoi server:</p>
       <table>
       <thead>
       <tr>
@@ -217,8 +160,8 @@ server_packages.dat binary`}</code></pre>
       </thead>
       <tbody><tr>
       <td>Come funziona</td>
-      <td>l&#39;app chiede a GitHub se c&#39;è un commit nuovo ogni tot minuti</td>
-      <td>GitHub avvisa il Server appena arriva il push</td>
+      <td>l&#39;app chiede a GitHub l&#39;ultimo commit di ogni repository ogni tot minuti</td>
+      <td>GitHub avvisa il Server appena arriva il push, e l&#39;app lo passa al server di quella repository</td>
       </tr>
       <tr>
       <td>Tempo di aggiornamento</td>
@@ -227,29 +170,23 @@ server_packages.dat binary`}</code></pre>
       </tr>
       <tr>
       <td>Cosa serve</td>
-      <td>niente: nessuna porta da aprire, nessun webhook su GitHub</td>
-      <td>una porta aperta su firewall e router (sezione 6) e il webhook su GitHub (sezione 7)</td>
+      <td>niente: nessuna porta da aprire, nessun webhook</td>
+      <td>una porta aperta per gioco (sezione 6) e il webhook in ogni repository (sezione 7)</td>
       </tr>
       </tbody></table>
       <Shot name="server-sync" alt="Scheda Nuovi pacchetti da GitHub" />
-      <p><strong>Controllo periodico</strong> (consigliato se non puoi o non vuoi aprire porte sul router): imposta <strong>Controlla GitHub ogni</strong> in minuti (minimo 1). Senza token GitHub accetta 60 richieste all&#39;ora da uno stesso PC: per controllare più spesso di ogni 5 minuti, o con ETS2 e ATS insieme a intervalli brevi, imposta il <strong>Token GitHub</strong>. Le sezioni 6 e 7 non servono.</p>
-      <p><strong>Webhook</strong>:</p>
-      <ol>
-      <li><strong>Porta</strong>: lascia quella proposta, <code>8787</code> per ETS2 e <code>8788</code> per ATS (ogni server deve usare una porta diversa; cambiala solo se è già usata da altro).</li>
-      <li><strong>Webhook secret</strong>: clicca <strong>Genera</strong>. Poi clicca sull&#39;icona dell&#39;occhio e copia il valore: servirà su GitHub (sezione 7).</li>
-      <li><strong>Payload URL</strong>: clicca <strong>Rileva IP pubblico</strong> per ottenere l&#39;indirizzo completo da incollare su GitHub, poi <strong>Copia</strong>.</li>
-      </ol>
-      <Shot name="server-webhook" alt="Campi del webhook" />
-      <p>In entrambi i casi il <strong>Token GitHub</strong> serve solo se la repository è <strong>privata</strong> (vedi sezione 8).</p>
-      <h3 id="54-salvare">5.4 Salvare</h3>
-      <p>Clicca <strong>Salva impostazioni</strong>. La Dashboard mostra lo stato del server, il commit installato e, a seconda della scelta, l&#39;ora dell&#39;ultimo controllo di GitHub o il Payload URL del webhook. Per vedere l&#39;altro gioco, sceglilo dal menu in alto a sinistra.</p>
-      <Shot name="server-dashboard" alt="Dashboard del Server" />
+      <p><strong>Controllo periodico</strong>: imposta <strong>Controlla GitHub ogni</strong> in minuti (minimo 1). Ogni controllo fa una richiesta per repository e senza token GitHub ne accetta 60 all&#39;ora da uno stesso PC: con molti server o intervalli brevi imposta il <strong>Token GitHub</strong> (sezione 8).</p>
+      <p><strong>Webhook</strong>: una porta per gioco (<code>8787</code> ETS2, <code>8788</code> ATS) e un solo <strong>Webhook secret</strong> (clicca <strong>Genera</strong>): nel webhook di ogni repository metti lo stesso Payload URL e lo stesso secret.</p>
+      <p>Clicca <strong>Salva impostazioni</strong>.</p>
+      <h3 id="54-piu-server-sullo-stesso-pc">5.4 Più server sullo stesso PC</h3>
       <ul>
-      <li><strong>Aggiorna ora</strong>: scarica subito l&#39;ultimo commit da GitHub e lo installa (utile anche per provare la configurazione).</li>
-      <li>il riquadro <strong>Server ETS2</strong> (o <strong>Server ATS</strong>) apre la pagina <strong>Server</strong>, dove si avvia, ferma e riavvia il server dedicato (sezione 10).</li>
+      <li>Ogni server ha il suo <code>server_logon_token</code>: due server accesi con lo stesso token non partono.</li>
+      <li>Ogni server ha le sue porte in <code>server_config.sii</code> (<em>connection/query dedicated port</em> e <em>virtual port</em>). L&#39;app le sceglie libere quando crea il server; per i giocatori da internet inoltra sul router le porte <em>dedicated</em> di ogni server.</li>
+      <li>Per la LAN la porta di query deve stare tra <code>27015</code> e <code>27020</code>: al massimo tre server visibili in LAN.</li>
+      <li>Un aggiornamento dei pacchetti riavvia solo il server della repository che è cambiata, e solo se era acceso. Un aggiornamento del server dedicato (SteamCMD) ferma tutti i server accesi di quel gioco e li riavvia alla fine.</li>
       </ul>
       <h3 id="55-ets2-e-ats-insieme">5.5 ETS2 e ATS sullo stesso PC</h3>
-      <p>Per gestire entrambi i server dallo stesso PC, configura prima un gioco, poi scegli l&#39;altro dal menu in alto a sinistra e ripeti i passi 5.1-5.4. Le differenze:</p>
+      <p>Scegli l&#39;altro gioco in alto a sinistra e ripeti i passi. Ogni gioco ha la sua installazione, i suoi server, la sua porta del webhook e la sua scelta tra controllo periodico e webhook.</p>
       <table>
       <thead>
       <tr>
@@ -264,11 +201,6 @@ server_packages.dat binary`}</code></pre>
       <td><code>amtrucks_server.exe</code></td>
       </tr>
       <tr>
-      <td>Cartella documenti</td>
-      <td><code>Euro Truck Simulator 2</code></td>
-      <td><code>American Truck Simulator</code></td>
-      </tr>
-      <tr>
       <td>Porta del webhook</td>
       <td><code>8787</code></td>
       <td><code>8788</code></td>
@@ -279,41 +211,33 @@ server_packages.dat binary`}</code></pre>
       <td><code>270880</code></td>
       </tr>
       </tbody></table>
-      <p>Ogni gioco usa la sua repository e sceglie da solo tra controllo periodico e webhook; con il webhook ognuno ha il suo secret e il suo webhook su GitHub (la porta va aperta solo per i giochi che usano il webhook). Nella pagina <strong>Log</strong> le righe iniziano con <code>[ETS2]</code> o <code>[ATS]</code>; le notifiche riportano il nome del gioco.</p>
+      <p>Nella pagina <strong>Log</strong> le righe iniziano con <code>[ETS2]</code> o <code>[ATS]</code>, seguite dal nome del server.</p>
       <h3 id="56-aggiornamenti-del-server-steamcmd">5.6 Aggiornamenti del server dedicato (SteamCMD)</h3>
-      <p>Quando SCS pubblica un aggiornamento del gioco, anche il server dedicato va aggiornato. Il PC Server lo fa da solo con <strong>SteamCMD</strong>, senza client Steam e senza account: i server dedicati di ETS2 e ATS si scaricano in modo anonimo.</p>
-      <ul>
-      <li>La prima volta l&#39;app scarica SteamCMD nella sua cartella dati (circa 150 MB, un minuto circa).</li>
-      <li>Ogni 2 ore (<strong>Controlla Steam ogni</strong>) confronta la build installata con l&#39;ultima pubblicata su Steam.</li>
-      <li>Se c&#39;è una build nuova e <strong>Aggiorna il server automaticamente</strong> è attivo, ferma il server, lo aggiorna e lo riavvia. Se è disattivato ricevi solo una notifica.</li>
-      </ul>
-      <p>Le opzioni sono in <strong>Server → Aggiornamenti</strong>, riquadro <strong>Aggiornamenti del server (SteamCMD)</strong>: l&#39;interruttore si applica subito, ore e cartella con <strong>Salva</strong>, senza riavviare il server. <strong>Cartella del server</strong> è la cartella dove SteamCMD installa i file: vuota = quella che contiene <code>bin\win_x64</code> dell&#39;eseguibile, che di solito è giusta.</p>
-      <p>In <strong>Server → Aggiornamenti</strong> il riquadro <strong>Server dedicato (Steam)</strong> mostra la build installata e l&#39;ultima su Steam, con i pulsanti <strong>Controlla</strong> e <strong>Aggiorna server</strong>. Durante l&#39;aggiornamento compare la fase (preparazione, download con la dimensione, verifica, installazione).</p>
+      <p>Quando SCS pubblica un aggiornamento del gioco, anche il server dedicato va aggiornato. L&#39;app lo fa con <strong>SteamCMD</strong>, senza client Steam e senza account: la prima volta scarica SteamCMD (circa 150 MB), poi ogni 2 ore (<strong>Controlla Steam ogni</strong>) confronta la build installata con l&#39;ultima su Steam. Con <strong>Aggiorna automaticamente</strong> attivo ferma i server accesi, aggiorna l&#39;installazione e li riavvia; se è disattivato ricevi solo una notifica.</p>
+      <p>Tutto è in fondo alla pagina <strong>Server → Tutti i server</strong>: build installata e ultima su Steam, pulsanti <strong>Controlla</strong> e <strong>Aggiorna</strong> (o <strong>Installa ora</strong> se il server non è ancora installato), fase in corso durante l&#39;aggiornamento e le opzioni.</p>
       <blockquote>
-      <p>Se il server è stato installato con il client Steam o copiato a mano, la build installata può risultare <em>Sconosciuta</em>: clicca una volta <strong>Aggiorna server</strong> e da lì in poi gli aggiornamenti sono automatici. Con <strong>Aggiorna server</strong> puoi anche installare il server da zero: imposta prima il percorso dell&#39;eseguibile dove vuoi che venga installato.</p>
+      <p>Se il server dedicato è stato installato con il client Steam o copiato a mano, la build installata può risultare <em>Sconosciuta</em>: clicca una volta <strong>Aggiorna</strong> e da lì in poi gli aggiornamenti sono automatici.</p>
       </blockquote>
       <hr />
       <h2 id="6-aprire-la-porta-del-webhook">6. Aprire la porta del webhook</h2>
       <blockquote>
       <p>Solo se hai scelto il <strong>Webhook</strong> (sezione 5.3). Con il controllo periodico salta alla sezione 8.</p>
       </blockquote>
-      <p>GitHub deve poter raggiungere il PC Server da internet sulla porta del webhook: 8787 per ETS2, 8788 per ATS.</p>
+      <p>GitHub deve poter raggiungere il PC Server da internet sulla porta del webhook del gioco: 8787 per ETS2, 8788 per ATS. Una porta basta per tutti i server di quel gioco.</p>
       <ol>
       <li><p><strong>Firewall di Windows</strong>: apri il <em>Prompt dei comandi</em> <strong>come amministratore</strong> e lancia:</p>
       <pre><code>{`netsh advfirewall firewall add rule name="ETS2 Package Webhook" dir=in action=allow protocol=TCP localport=8787,8788`}</code></pre>
-      <p>La regola apre le porte di entrambi i giochi; se ne usi uno solo basta la sua.</p>
       </li>
-      <li><p><strong>Router</strong>: nella pagina di configurazione del router crea un <em>port forwarding</em> (a volte chiamato &quot;virtual server&quot; o &quot;NAT&quot;):
-      porta esterna <strong>8787</strong> TCP → IP LAN del PC Server (è scritto sotto il Payload URL nell&#39;app, es. <code>192.168.1.50</code>), porta interna <strong>8787</strong>. Per ATS aggiungi una regola uguale con la porta <strong>8788</strong>.</p>
+      <li><p><strong>Router</strong>: crea un <em>port forwarding</em> della porta <strong>8787</strong> TCP (e <strong>8788</strong> per ATS) verso l&#39;IP LAN del PC Server (è scritto sotto il Payload URL nell&#39;app, es. <code>192.168.1.50</code>).</p>
       </li>
-      <li><p><strong>Verifica</strong>: da un altro dispositivo <strong>fuori dalla tua rete</strong> (es. lo smartphone con la rete mobile) apri <code>http://IP_PUBBLICO:8787/health</code> (ATS: <code>:8788/health</code>). Deve comparire <code>OK</code>.</p>
+      <li><p><strong>Verifica</strong>: da un dispositivo <strong>fuori dalla tua rete</strong> (es. lo smartphone con la rete mobile) apri <code>http://IP_PUBBLICO:8787/health</code>. Deve comparire <code>OK</code>.</p>
       </li>
       </ol>
       <blockquote>
       <p>Se il tuo IP pubblico cambia spesso, usa un servizio DNS dinamico (es. DuckDNS, No-IP) e metti il nome al posto dell&#39;IP nel Payload URL.</p>
       </blockquote>
       <h2 id="7-creare-il-webhook-su-github">7. Creare il webhook su GitHub</h2>
-      <p>Solo con il <strong>Webhook</strong>. Ogni gioco ha la sua repository e quindi il suo webhook: con ETS2 e ATS ripeti questi passi nella repository di ciascun gioco, con il Payload URL e il secret di quel gioco.</p>
+      <p>Solo con il <strong>Webhook</strong>. Ripeti questi passi <strong>in ogni repository</strong> dei server del gioco, sempre con lo stesso Payload URL e lo stesso secret: l&#39;app capisce da sola a quale server appartiene il push.</p>
       <ol>
       <li><p>Nella repository su GitHub vai su <strong>Settings → Webhooks → Add webhook</strong>.</p>
       </li>
@@ -335,7 +259,7 @@ server_packages.dat binary`}</code></pre>
       </tr>
       <tr>
       <td>Secret</td>
-      <td>lo stesso <strong>Webhook secret</strong> generato nell&#39;app</td>
+      <td>il <strong>Webhook secret</strong> dell&#39;app</td>
       </tr>
       <tr>
       <td>SSL verification</td>
@@ -358,7 +282,6 @@ server_packages.dat binary`}</code></pre>
       </li>
       </ol>
       <Shot name="github-webhook-consegne" alt="Recent Deliveries del webhook" />
-      <p>La spunta verde indica una consegna riuscita, il triangolo rosso una consegna fallita: cliccaci sopra e apri la scheda <strong>Response</strong> per vedere cosa ha risposto l&#39;app. Con <strong>Redeliver</strong> puoi reinviarla dopo aver corretto il problema.</p>
       <table>
       <thead>
       <tr>
@@ -367,8 +290,12 @@ server_packages.dat binary`}</code></pre>
       </tr>
       </thead>
       <tbody><tr>
-      <td>200 <code>pong</code></td>
+      <td>200 <code>pong</code> / 202 <code>queued ... for EU Convoy</code></td>
       <td>tutto ok</td>
+      </tr>
+      <tr>
+      <td>202 <code>ignored: no server uses ...</code></td>
+      <td>nessun server usa quella repository e quel branch: controlla repository e branch del server</td>
       </tr>
       <tr>
       <td>401 <code>invalid signature</code></td>
@@ -384,7 +311,7 @@ server_packages.dat binary`}</code></pre>
       </tr>
       </tbody></table>
       <h2 id="8-token-per-repository-private">8. Token per repository private</h2>
-      <p>Serve <strong>solo sul Server</strong> e <strong>solo se la repository è privata</strong> (oppure, con il controllo periodico, per controllare più spesso di ogni 5 minuti). Il Client non ne ha bisogno.</p>
+      <p>Serve <strong>solo sul Server</strong> e <strong>solo se le repository sono private</strong> (oppure, con il controllo periodico, quando le richieste superano le 60 all&#39;ora). Un token può coprire tutte le repository dei server. Il Client non ne ha bisogno.</p>
       <ol>
       <li><p>Su GitHub: avatar in alto a destra → <strong>Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token</strong> (link diretto: <a href="https://github.com/settings/personal-access-tokens/new">https://github.com/settings/personal-access-tokens/new</a>).</p>
       </li>
@@ -406,19 +333,17 @@ server_packages.dat binary`}</code></pre>
       </tr>
       <tr>
       <td>Resource owner</td>
-      <td>l&#39;account (o l&#39;organizzazione) proprietario della repository</td>
+      <td>l&#39;account (o l&#39;organizzazione) proprietario delle repository</td>
       </tr>
       <tr>
       <td>Repository access</td>
-      <td><strong>Only select repositories</strong> → la repository dei pacchetti</td>
+      <td><strong>Only select repositories</strong> → le repository dei server</td>
       </tr>
       <tr>
       <td>Permissions → Repository permissions → <strong>Contents</strong></td>
       <td><strong>Read-only</strong></td>
       </tr>
       </tbody></table>
-      <p><em>Metadata: Read-only</em> viene aggiunto automaticamente. Tutto il resto resta <em>No access</em>.</p>
-      <p>Per i permessi clicca <strong>Add permissions</strong>, cerca <strong>Contents</strong> e lascia <strong>Access: Read-only</strong>. Con <em>Only select repositories</em> clicca <strong>Select repositories</strong> e scegli la repository dei pacchetti.</p>
       <Shot name="github-token" alt="Nuovo fine-grained token" />
       </li>
       <li><p><strong>Generate token</strong>, copia il valore (<code>github_pat_...</code>, viene mostrato una sola volta) e incollalo nell&#39;app in <strong>Token GitHub</strong>, poi <strong>Salva impostazioni</strong>.</p>
@@ -430,39 +355,38 @@ server_packages.dat binary`}</code></pre>
       <hr />
       <h2 id="9-prova-completa">9. Prova completa</h2>
       <ol>
-      <li>Sul <strong>Server</strong> clicca <strong>Aggiorna ora</strong>: nei <strong>Log</strong> deve comparire <code>[ETS2] Manual update: latest commit on main is ...</code> e poi l&#39;installazione (le righe del log sono sempre in inglese).</li>
-      <li>Sul <strong>Client</strong> esegui <code>export_server_packages</code> in ETS2 (o <strong>Push ora</strong> dopo aver cambiato qualcosa).</li>
-      <li>Sul <strong>Server</strong>, entro pochi secondi con il webhook (o al controllo successivo con il controllo periodico): arriva il nuovo commit, i file vengono scaricati e verificati, ETS2 viene fermato, i vecchi file finiscono in backup, i nuovi vengono installati ed ETS2 riparte.</li>
+      <li>Sul <strong>Client</strong> esegui <code>export_server_packages</code> nel gioco e, se hai più server, scegli quello da provare.</li>
+      <li>Sul <strong>Server</strong>, entro pochi secondi con il webhook (o al controllo successivo, oppure subito con <strong>Controlla ora</strong> nella Dashboard): arriva il nuovo commit, i file vengono scaricati e verificati, installati nella cartella home del server e, se il server era acceso, riavviato con i nuovi pacchetti.</li>
+      <li>Nella pagina del server clicca <strong>Avvia</strong> e guarda la <strong>Console</strong>.</li>
       </ol>
-      <p>La pagina <strong>Log</strong> di ciascun PC mostra tutto quello che succede, con i filtri <em>Warning</em> ed <em>Errori</em> e il pulsante <strong>Apri file di log</strong> per lo storico completo.</p>
+      <Shot name="server-dashboard" alt="Dashboard del Server" />
+      <p>La pagina <strong>Log</strong> di ciascun PC mostra tutto quello che succede, con i filtri <em>Warning</em> ed <em>Errori</em> e il pulsante <strong>Apri file di log</strong>.</p>
       <Shot name="logs" alt="Pagina Logs" />
-      <p>Se i file del nuovo commit sono identici a quelli già installati, ETS2 <strong>non</strong> viene riavviato.</p>
-      <h2 id="10-pagina-server">10. Pagina Server: controllo, console e aggiornamenti</h2>
-      <p>Solo in modalità Server, la pagina <strong>Server</strong> raccoglie tutto quello che riguarda il server dedicato del gioco scelto in alto a sinistra (compare solo se quel gioco è in modalità Server):</p>
+      <p>Se i file del nuovo commit sono identici a quelli installati, il server <strong>non</strong> viene riavviato. Prima di ogni installazione i file precedenti finiscono in <code>backups</code> nella cartella home; se il server si chiude subito dopo l&#39;aggiornamento, l&#39;app rimette i file di prima.</p>
+      <h2 id="10-pagina-server">10. Le pagine Server</h2>
+      <p>Con il ruolo Server attivo, nella barra laterale ci sono <strong>Nuovo server</strong> e il gruppo <strong>Server</strong>, che si apre a tendina:</p>
       <ul>
-      <li>in alto i pulsanti <strong>Avvia</strong>, <strong>Ferma</strong> e <strong>Riavvia</strong> (anche dal menu del tray) e tre riquadri: stato del server, build installata e ultima build su Steam;</li>
-      <li>nella barra laterale <strong>Server</strong> si apre a tendina: la sotto-voce <strong>Console</strong> mostra il log del server dedicato (<code>server.log.txt</code>) in tempo reale;</li>
-      <li>la sotto-voce <strong>Aggiornamenti</strong> gli aggiornamenti del server tramite SteamCMD (sezione 5.6). Un pallino arancione sulla voce indica una build nuova o un aggiornamento in corso.</li>
-      <li>la sotto-voce <strong>Configurazione</strong> modifica il <code>server_config.sii</code> del server: nome, descrizione, messaggio di benvenuto, password, giocatori massimi, token di login di Steam, opzioni di gioco (danni, traffico, nomi, limitatore...), veicoli AI, porte e moderatori. I moderatori si vedono con nome e avatar di Steam e si aggiungono incollando lo Steam ID o il link del profilo (anche <code>steamcommunity.com/id/nome</code>): nel file l&#39;app scrive sempre lo Steam ID. Vengono cambiati solo i valori: commenti e altre righe del file restano come sono, e la versione precedente viene salvata in <code>server_config.sii.bak</code>. Le modifiche valgono al prossimo avvio del server: <strong>Salva e riavvia il server</strong> le applica subito. Il file è quello accanto a <code>server_packages.sii</code> (percorso modificabile nelle <em>Opzioni avanzate</em> del server); se non esiste, crealo in gioco con il comando <code>export_server_config</code> nella console.</li>
+      <li><strong>Tutti i server</strong>: una scheda per server con stato, cartella home, repository, commit installato e i pulsanti <strong>Avvia/Ferma</strong>, <strong>Riavvia</strong>, <strong>Aggiorna pacchetti</strong> (<strong>Avvia tutti</strong> e <strong>Ferma tutti</strong> in alto); in fondo l&#39;installazione condivisa e i suoi aggiornamenti (sezione 5.6). Un pallino arancione sulla voce indica una build nuova, un aggiornamento in corso o il server dedicato non ancora installato.</li>
+      <li><strong>un elemento per ogni server</strong>, con il pallino del suo stato: apre la pagina di quel server.</li>
       </ul>
-      <p>Nella <strong>Console</strong>:</p>
+      <Shot name="servers-list" alt="Tutti i server" />
+      <p>La pagina di un server ha i comandi in alto (<strong>Avvia/Ferma</strong>, <strong>Riavvia</strong>, <strong>Aggiorna pacchetti</strong>) e tre schede, tutte solo di quel server:</p>
       <ul>
-      <li><strong>Filtra</strong> per cercare una parola, <strong>Nascondi warning</strong> per nascondere i warning (es. i tanti <code>Missing default icon</code>), <strong>Segui</strong> per seguire le nuove righe, <strong>Apri file</strong> per aprire il log.</li>
+      <li><strong>Console</strong>: il suo <code>server.log.txt</code> in tempo reale, con <strong>Filtra</strong>, <strong>Nascondi warning</strong>, <strong>Segui</strong> e <strong>Apri file</strong>. Errori in rosso, warning in giallo, righe <code>[MP]</code> in azzurro.</li>
+      <li><strong>Configurazione</strong>: il suo <code>server_config.sii</code>: nome, descrizione, messaggio di benvenuto, password, giocatori massimi, token di Steam, opzioni di gioco, veicoli AI, porte e moderatori (con nome e avatar di Steam, aggiunti con lo Steam ID o il link del profilo). Vengono cambiati solo i valori e la versione precedente resta in <code>server_config.sii.bak</code>. <strong>Salva e riavvia il server</strong> applica subito le modifiche. Se il file manca, <strong>Crea server_config.sii</strong> lo crea con porte libere.</li>
+      <li><strong>Impostazioni</strong>: nome, cartella home (solo a server fermo), argomenti da riga di comando, repository e branch, ed <strong>Elimina</strong>: toglie il server dall&#39;app e, se vuoi, sposta la sua cartella home nel Cestino. La repository su GitHub non viene toccata.</li>
       </ul>
-      <p>Gli errori sono in rosso, i warning in giallo, le righe <code>[MP]</code> (multiplayer) in azzurro. Il log viene riletto da capo a ogni avvio del server.</p>
-      <Shot name="server-console" alt="Pagina Server, scheda Console" />
-      <p>Se il server si chiude subito dopo l&#39;avvio, la risposta è quasi sempre nelle ultime righe della Console.</p>
-      <h2 id="11-aggiornare-lapp">11. Aggiornare l&#39;app</h2>
-      <p>In basso a sinistra, sopra la scelta del tema, c&#39;è il riquadro della <strong>versione</strong>. L&#39;app controlla da sola le nuove versioni all&#39;avvio e ogni 6 ore, e mostra una notifica quando ne trova una.</p>
-      <ol>
-      <li>Quando compare <strong>Versione X disponibile</strong> clicca <strong>Scarica</strong> (con <strong>Novità</strong> leggi le novità su GitHub).</li>
-      <li>Finito il download clicca <strong>Riavvia per aggiornare</strong>: l&#39;app si chiude, si aggiorna e riparte da sola con le stesse impostazioni.</li>
-      </ol>
-      <p>Il pulsante con le frecce controlla subito. Le stesse voci sono nel menu del tray. Se non riavvii, l&#39;aggiornamento scaricato viene installato alla prossima uscita dall&#39;app (<strong>Esci</strong>).</p>
-      <blockquote>
-      <p>Sul PC Server l&#39;aggiornamento non viene installato mentre un server si sta aggiornando. Il server dedicato non viene fermato: riaggiornare l&#39;app non interrompe la partita.</p>
-      </blockquote>
-      <p>La versione <strong>portable</strong> (.zip) non si aggiorna da sola: <strong>Apri release</strong> apre la pagina da cui scaricarla.</p>
+      <Shot name="server-page" alt="Pagina di un server" />
+      <p>Se un server si chiude subito dopo l&#39;avvio, la risposta è quasi sempre nelle ultime righe della sua Console.</p>
+      <h2 id="11-aggiornare-lapp">11. Aggiornare l&#39;app (e passare dalla 4.x alla 5)</h2>
+      <p>In basso a sinistra c&#39;è il riquadro della <strong>versione</strong>. L&#39;app controlla da sola le nuove versioni all&#39;avvio e ogni 6 ore: quando compare <strong>Versione X disponibile</strong> clicca <strong>Scarica</strong>, poi <strong>Riavvia per aggiornare</strong>. L&#39;aggiornamento non ferma i server dedicati. La versione <strong>portable</strong> (.zip) non si aggiorna da sola.</p>
+      <p><strong>Dalla 4.x alla 5</strong> le impostazioni vengono convertite da sole, senza perdere niente:</p>
+      <ul>
+      <li>un PC in modalità <strong>Server</strong> diventa il ruolo Server con un server chiamato <em>ETS2 server</em> (o <em>ATS server</em>): cartella home = la cartella del suo <code>server_packages.sii</code> (di solito Documenti), stessa repository e stesso webhook o controllo periodico. L&#39;installazione è quella del suo eseguibile e lo storico dei commit installati viene mantenuto;</li>
+      <li>un PC in modalità <strong>Client</strong> diventa il ruolo Client con un server a cui inviare: la sua repository;</li>
+      <li>il file delle impostazioni della 4.x resta accanto al nuovo come <code>settings.v4.json</code>.</li>
+      </ul>
+      <p>Da lì puoi aggiungere altri server. Una differenza: un aggiornamento dei pacchetti ora riavvia un server solo se era acceso (nella 4.x lo avviava sempre).</p>
       <h2 id="12-problemi-comuni">12. Problemi comuni</h2>
       <table>
       <thead>
@@ -472,20 +396,28 @@ server_packages.dat binary`}</code></pre>
       </tr>
       </thead>
       <tbody><tr>
-      <td><code>GitHub API 404 su commits/master</code></td>
-      <td>Il branch nelle impostazioni è sbagliato (spesso deve essere <code>main</code>), oppure la repository è privata e il token manca / è scaduto / non include quella repository. Controlla anche il Repository URL</td>
+      <td><code>GitHub API 404 su .../commits/master</code></td>
+      <td>Il branch del server è sbagliato (spesso deve essere <code>main</code>), oppure la repository è privata e il token manca / è scaduto / non include quella repository. Controlla anche l&#39;URL della repository</td>
       </tr>
       <tr>
       <td><code>GitHub API 403 ... rate limit exceeded</code></td>
-      <td>Con il controllo periodico senza token si superano le 60 richieste all&#39;ora di GitHub: aumenta <strong>Controlla GitHub ogni</strong> o imposta il <strong>Token GitHub</strong> (sezione 8). Il controllo riprende da solo quando il limite si azzera</td>
+      <td>Con il controllo periodico senza token si superano le 60 richieste all&#39;ora di GitHub: aumenta <strong>Controlla GitHub ogni</strong> o imposta il <strong>Token GitHub</strong> (sezione 8)</td>
       </tr>
       <tr>
-      <td><code>ETS2 si è chiuso subito dopo l&#39;avvio</code></td>
-      <td>Il server dedicato si è chiuso da solo: guarda <strong>Server → Console</strong> per il motivo</td>
+      <td><code>server_packages.sii/.dat di ... non ancora presenti</code></td>
+      <td>Il server non ha ancora ricevuto pacchetti: esegui <code>export_server_packages</code> sul Client e invialo a quel server (o <strong>Aggiorna pacchetti</strong> se sono già nella repository)</td>
       </tr>
       <tr>
-      <td><code>Steam log on failed - code ...</code> (in <strong>Server → Console</strong>)</td>
-      <td>Problema del <code>server_logon_token</code> in <code>server_config.sii</code>: mancante, sbagliato, scaduto o già usato da un&#39;altra istanza del server. Generane uno nuovo su <a href="https://steamcommunity.com/dev/managegameservers">https://steamcommunity.com/dev/managegameservers</a> con App ID <code>227300</code> per ETS2 o <code>270880</code> per ATS</td>
+      <td><code>Steam log on failed - code ...</code> (nella Console)</td>
+      <td>Problema del <code>server_logon_token</code>: mancante, sbagliato, scaduto o <strong>usato da un altro server acceso</strong>. Ogni server vuole il suo token: generane uno su <a href="https://steamcommunity.com/dev/managegameservers">https://steamcommunity.com/dev/managegameservers</a></td>
+      </tr>
+      <tr>
+      <td>Un server si chiude subito o non si vede nella lista dei server</td>
+      <td>Porte uguali a quelle di un altro server acceso: cambiale in <strong>Configurazione → Porte</strong> (e inoltrale sul router)</td>
+      </tr>
+      <tr>
+      <td><code>... usano la stessa cartella home</code></td>
+      <td>Ogni server vuole una cartella home propria, anche tra ETS2 e ATS</td>
       </tr>
       <tr>
       <td>Webhook con risposta 401</td>
@@ -500,39 +432,23 @@ server_packages.dat binary`}</code></pre>
       <td>Un altro programma usa la porta: cambiala nell&#39;app <strong>e</strong> nel Payload URL su GitHub</td>
       </tr>
       <tr>
-      <td><code>I server di ETS2 e ATS non possono usare la stessa porta del webhook</code></td>
-      <td>Dai a ciascun server la sua porta (8787 e 8788) e aggiorna il Payload URL su GitHub</td>
-      </tr>
-      <tr>
-      <td><code>ETS2 e ATS usano la stessa repository, lo stesso branch e gli stessi nomi di file</code></td>
-      <td>I due giochi si sovrascriverebbero i file: usa una repository o un branch diverso per ciascuno</td>
-      </tr>
-      <tr>
       <td>Il Client resta su <em>in attesa di export_server_packages</em></td>
-      <td>Il gioco non ha ancora esportato i file, oppure la <strong>Cartella documenti</strong> del gioco punta alla cartella sbagliata</td>
+      <td>Il gioco non ha ancora esportato i file, oppure la <strong>Cartella documenti</strong> punta alla cartella sbagliata</td>
       </tr>
       <tr>
       <td>Il push fallisce con errore di autenticazione</td>
-      <td>Accedi di nuovo nella finestra di Git Credential Manager con un account che ha accesso in scrittura alla repository</td>
-      </tr>
-      <tr>
-      <td><strong>Avvia con Windows</strong> non si attiva</td>
-      <td>Funziona solo nell&#39;app installata. Se nella descrizione compare <em>Disattivato in Windows</em>, riattiva l&#39;app in <em>Gestione attività → App di avvio</em></td>
+      <td>Accedi di nuovo nella finestra di Git Credential Manager con un account che può scrivere nella repository</td>
       </tr>
       <tr>
       <td><code>Aggiornamento con SteamCMD non riuscito: ERROR! ... (Disk write failure)</code></td>
-      <td>Spazio su disco insufficiente o cartella del server non scrivibile. Il server riparte comunque con i file di prima</td>
-      </tr>
-      <tr>
-      <td>Popup <strong>Git non rilevato</strong> anche dopo l&#39;installazione</td>
-      <td>L&#39;installazione di Git non è finita o è in una cartella insolita: reinstalla Git for Windows con le opzioni predefinite e clicca <strong>Ricontrolla</strong></td>
+      <td>Spazio su disco insufficiente o cartella dell&#39;installazione non scrivibile. I server ripartono comunque con i file di prima</td>
       </tr>
       <tr>
       <td><em>Salva impostazioni</em> o <em>Esci</em> non rispondono</td>
       <td>È in corso un aggiornamento (dei pacchetti o del server con SteamCMD): aspetta che finisca</td>
       </tr>
       </tbody></table>
-      <p>I file dell&#39;app (impostazioni, log, stato del server) sono in <code>%APPDATA%\ETS2 Package Sync\</code>. Webhook secret e token sono salvati cifrati e leggibili solo dal tuo utente Windows.</p>
+      <p>I file dell&#39;app (impostazioni, log, storico dei server) sono in <code>%APPDATA%\ETS2 Package Sync\</code>. Webhook secret e token sono salvati cifrati e leggibili solo dal tuo utente Windows.</p>
     </>
   );
 }

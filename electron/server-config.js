@@ -157,4 +157,87 @@ function updateServerConfig(text, values, moderators) {
   return bom + [...lines.slice(0, start + 1), ...body, ...lines.slice(end)].join(eol);
 }
 
-module.exports = { FIELDS, parseServerConfig, updateServerConfig, checkConfig };
+// ------------------------------------------------------------------ new servers
+
+const PORT_KEYS = ['connection_virtual_port', 'query_virtual_port', 'connection_dedicated_port', 'query_dedicated_port'];
+
+/** The four ports of a server_config.sii ({} when the file cannot be read). */
+function portsOf(text) {
+  try {
+    const { values } = parseServerConfig(text);
+    return Object.fromEntries(PORT_KEYS.filter((key) => key in values).map((key) => [key, values[key]]));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Ports for one more server on this PC: the first pair of free virtual ports (100-200) and of free physical
+ * ports (from 27015; LAN servers must stay within 27015-27020) after the ones already used by `taken`
+ * (an array of portsOf() results). Two servers running at the same time must not share any of them.
+ */
+function freePorts(taken) {
+  const used = new Set(taken.flatMap((ports) => Object.values(ports)));
+  const pair = (from, to) => {
+    for (let port = from; port + 1 <= to; port += 2) if (!used.has(port) && !used.has(port + 1)) return [port, port + 1];
+    return [from, from + 1];
+  };
+  const [connectionVirtual, queryVirtual] = pair(100, 200);
+  const [connectionDedicated, queryDedicated] = pair(27015, 27115);
+  return {
+    connection_virtual_port: connectionVirtual,
+    query_virtual_port: queryVirtual,
+    connection_dedicated_port: connectionDedicated,
+    query_dedicated_port: queryDedicated,
+  };
+}
+
+/** Defaults of the dedicated server (the same file it writes on its own), with a random nameless id. */
+const TEMPLATE_VALUES = {
+  lobby_name: 'Euro Truck Simulator 2 server',
+  description: '',
+  welcome_message: '',
+  password: '',
+  max_players: 8,
+  max_vehicles_total: 100,
+  max_ai_vehicles_player: 50,
+  max_ai_vehicles_player_spawn: 50,
+  connection_virtual_port: 100,
+  query_virtual_port: 101,
+  connection_dedicated_port: 27015,
+  query_dedicated_port: 27016,
+  server_logon_token: '',
+  player_damage: true,
+  traffic: true,
+  hide_in_company: false,
+  hide_colliding: true,
+  force_speed_limiter: false,
+  mods_optioning: false,
+  timezones: 0,
+  service_no_collision: false,
+  in_menu_ghosting: false,
+  name_tags: true,
+};
+
+/** Text of a new server_config.sii: the defaults with `values` on top (known fields only) and the moderators. */
+function newServerConfig(values = {}, moderators = []) {
+  const hex = (n) => Math.floor(Math.random() * 16 ** n).toString(16).padStart(n, '0');
+  const merged = { ...TEMPLATE_VALUES };
+  for (const [key, value] of Object.entries(values)) if (key in FIELDS) merged[key] = value;
+  return [
+    'SiiNunit',
+    '{',
+    `server_config : _nameless.${hex(3)}.${hex(4)}.${hex(4)} {`,
+    ...Object.entries(merged).map(([key, value]) => ` ${key}: ${writeValue(key, value)}`),
+    ' friends_only: false',
+    ' show_server: true',
+    ` ${MODERATORS}: ${moderators.length}`,
+    ...moderators.map((id, i) => ` ${MODERATORS}[${i}]: ${id}`),
+    '}',
+    '',
+    '}',
+    '',
+  ].join('\r\n');
+}
+
+module.exports = { FIELDS, PORT_KEYS, parseServerConfig, updateServerConfig, checkConfig, portsOf, freePorts, newServerConfig };

@@ -8,14 +8,16 @@ export function GameIcon({ id, className = 'size-5' }) {
   return <img src={GAME[id].icon} alt="" className={`shrink-0 object-contain ${className}`} />;
 }
 
-/** Mode and status of a game, e.g. "Server · Idle" (nothing for a game not configured). */
+/** Roles and status of a game, e.g. "Client · Server - 2 of 3 servers running" (nothing for a game not configured). */
 function GameLine({ g }) {
   const t = useT();
   if (!g) return null;
+  const roles = ['client', 'server'].filter((role) => g[role]);
+  const status = (g.server || g.client).status;
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <StatusDot state={g.state} className="shrink-0" />
-      <span className="truncate">{t(`mode.${g.mode}`)} · {g.status}</span>
+      <span className="truncate">{roles.map((role) => t(`role.${role}`)).join(' · ')} - {status}</span>
     </span>
   );
 }

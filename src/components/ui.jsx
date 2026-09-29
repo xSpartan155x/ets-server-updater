@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Check, Copy, Eye, EyeOff, FolderOpen, Globe, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Check, Copy, Eye, EyeOff, FolderOpen, Globe, Loader2, X } from 'lucide-react';
 import { Trans, useT } from '../i18n';
 
 export const STATE_STYLES = {
@@ -251,3 +251,63 @@ export function WebhookUrl({ port, localIps = [] }) {
     </div>
   );
 }
+
+/**
+ * Dialog over the page: icon, title, body and a footer of buttons. Escape and a click outside call onClose
+ * (unless it is null: a choice that must be made).
+ */
+export function Modal({ icon: Icon, title, description, children, footer, onClose, size = 'md' }) {
+  const t = useT();
+  useEffect(() => {
+    if (!onClose) return undefined;
+    const close = (event) => event.key === 'Escape' && onClose();
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [onClose]);
+  const width = { md: 'max-w-md', lg: 'max-w-xl', xl: 'max-w-2xl' }[size];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-6 backdrop-blur-sm" onMouseDown={onClose || undefined}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className={`flex max-h-full w-full ${width} flex-col rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 p-5">
+          {Icon && (
+            <div className="rounded-xl bg-orange-50 p-2.5 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400">
+              <Icon className="size-5" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50">{title}</h2>
+            {description && <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{description}</p>}
+          </div>
+          {onClose && (
+            <button type="button" onClick={onClose} title={t('ui.close')} className="cursor-pointer rounded p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+        {children && <div className="min-h-0 overflow-y-auto px-5 pb-5">{children}</div>}
+        {footer && <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-4 dark:border-slate-800">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+/** Small colored label, e.g. "Running" next to a server. */
+export function Badge({ tone = 'slate', children }) {
+  const tones = {
+    slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+    green: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
+    orange: 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400',
+    red: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
+    blue: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
+  };
+  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${tones[tone]}`}>{children}</span>;
+}
+
+/** Tone of a Badge for a state of the engines ('ok' | 'busy' | 'error' | 'idle'). */
+export const STATE_TONE = { ok: 'green', busy: 'blue', error: 'red', idle: 'slate' };

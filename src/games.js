@@ -27,6 +27,21 @@ export const GAMES = [
 
 export const GAME = Object.fromEntries(GAMES.map((game) => [game.id, game]));
 
-/** Ids of the games in use in a state snapshot, in the order of GAMES (optionally only the ones in `mode`). */
-export const activeIds = (snapshot, mode) =>
-  GAMES.map((g) => g.id).filter((id) => snapshot.games[id] && (!mode || snapshot.games[id].mode === mode));
+/** Ids of the games in use in a state snapshot, in the order of GAMES (optionally only the ones with `role` on). */
+export const activeIds = (snapshot, role) =>
+  GAMES.map((g) => g.id).filter((id) => snapshot.games[id] && (!role || snapshot.games[id][role]));
+
+/** Id of a server made from its name (the same rule as electron/settings.js). */
+export function slug(text) {
+  const base = String(text || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
+  return base || 'server';
+}
+
+/** A free id for `name` among the ids `taken`. */
+export function uniqueId(name, taken) {
+  const base = slug(name);
+  let id = base;
+  for (let n = 2; taken.includes(id); n++) id = `${base}-${n}`;
+  return id;
+}

@@ -1,8 +1,9 @@
 import {
-  Activity, ChevronRight, TriangleAlert, ArrowRight, CloudUpload, Copy, ExternalLink, FolderGit2, FolderOpen, GitBranch, GitCommit, Cloud,
-  RefreshCw, Server, Settings as SettingsIcon, Webhook,
+  Activity, ArrowRight, ChevronRight, Cloud, CloudUpload, Copy, ExternalLink, FolderGit2, FolderOpen, GitBranch, List, Play, PlusCircle, Square,
+  RefreshCw, Server, ServerCog, Settings as SettingsIcon, Tag, TriangleAlert, Webhook,
 } from 'lucide-react';
-import { Button, Card, PageHeader, StatusDot, STATE_STYLES, WebhookUrl } from '../components/ui';
+import { Badge, Button, Card, PageHeader, STATE_STYLES, STATE_TONE, StatusDot, WebhookUrl } from '../components/ui';
+import { shortRepo } from '../components/DestinationChooser';
 import { GAME } from '../games';
 import { LogLine } from './Logs';
 import { Trans, useT } from '../i18n';
@@ -19,18 +20,19 @@ function Stat({ icon: Icon, label, children }) {
   );
 }
 
-function StatusHero({ snapshot }) {
+function StatusHero({ role, label }) {
   const t = useT();
-  const style = STATE_STYLES[snapshot.state] || STATE_STYLES.idle;
-  const label = t(`dash.state.${snapshot.state in STATE_STYLES ? snapshot.state : 'idle'}`);
+  const style = STATE_STYLES[role.state] || STATE_STYLES.idle;
   return (
     <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
       <div className={`flex size-12 shrink-0 items-center justify-center rounded-full ${style.soft} ring-8 ${style.ring}`}>
-        <StatusDot state={snapshot.state} className="scale-150" />
+        <StatusDot state={role.state} className="scale-150" />
       </div>
       <div className="min-w-0">
-        <div className={`text-xs font-semibold tracking-wide uppercase ${style.text}`}>{label}</div>
-        <div className="select-text mt-0.5 text-base font-medium wrap-break-word text-slate-900 dark:text-slate-100">{snapshot.status}</div>
+        <div className={`text-xs font-semibold tracking-wide uppercase ${style.text}`}>
+          {label} · {t(`dash.state.${role.state in STATE_STYLES ? role.state : 'idle'}`)}
+        </div>
+        <div className="select-text mt-0.5 text-base font-medium wrap-break-word text-slate-900 dark:text-slate-100">{role.status}</div>
       </div>
     </div>
   );
@@ -76,31 +78,7 @@ function FlowArrow({ label }) {
   );
 }
 
-/** g: snapshot of the game; s: its settings. */
-function ClientView({ game, g, s }) {
-  const t = useT();
-  const d = g.details;
-  return (
-    <>
-      <Card title={t('dash.flowTitle')} icon={Copy} description={t('dash.flowDescription', { game: game.name })}>
-        <div className="flex items-stretch gap-2">
-          <FlowStep icon={FolderOpen} title={t('dash.flowSource', { game: game.name })} detail={d.sourcePath} footer={d.files?.join(', ')} />
-          <FlowArrow label={t('dash.flowCopy')} />
-          <FlowStep icon={FolderGit2} title={t('dash.flowTemp')} detail={d.tempPath} footer={t('dash.flowTempFooter')} />
-          <FlowArrow label={t('dash.flowPush')} />
-          <FlowStep icon={Cloud} title="GitHub" detail={s.repository} footer={t('dash.flowLastPush', { value: d.lastPush || t('dash.never') })} />
-        </div>
-      </Card>
-      <div className="grid grid-cols-3 gap-4">
-        <Stat icon={GitBranch} label={t('dash.branch')}>{d.branch}</Stat>
-        <Stat icon={RefreshCw} label={t('dash.lastCheck')}>{d.lastCheck || t('dash.Never')}</Stat>
-        <Stat icon={CloudUpload} label={t('dash.lastPush')}>{d.lastPush || t('dash.Never')}</Stat>
-      </div>
-    </>
-  );
-}
-
-/** Warning of the Client mode without Git, with the button that opens the Git popup. */
+/** Warning of the client role without Git, with the button that opens the Git popup. */
 function GitMissing({ onGitHelp }) {
   const t = useT();
   return (
@@ -112,54 +90,164 @@ function GitMissing({ onGitHelp }) {
   );
 }
 
-/** How the server finds new commits: polling of the branch, or the GitHub webhook with its Payload URL. */
-function SyncCard({ game, d, localIps }) {
+/** Client role: where the exports come from and the servers they can be sent to. */
+function ClientView({ id, game, client }) {
   const t = useT();
-  if (d.syncMethod === 'polling') {
-    return (
-      <Card title={t('dash.pollingTitle', { game: game.name })} icon={RefreshCw}>
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          {t('dash.pollingText', { minutes: d.pollMinutes, value: d.lastPoll || t('dash.never') })}
-        </p>
-      </Card>
-    );
-  }
-  return (
-    <Card title={t('dash.webhookTitle', { game: game.name })} icon={Webhook} description={t('dash.webhookDescription')}>
-      <WebhookUrl port={d.port} localIps={localIps} />
-    </Card>
-  );
-}
-
-/** Server mode: the package sync (commit, polling or webhook); the dedicated server itself is in the Server page. */
-function ServerView({ game, g, localIps, onNavigate }) {
-  const t = useT();
-  const d = g.details;
+  const d = client.details;
+  const push = (action) => window.api.runAction(id, 'client', action);
   return (
     <>
-      <div className="grid grid-cols-3 gap-4">
-        <button type="button" onClick={() => onNavigate('server')} className="group cursor-pointer text-left" title={t('dash.openServer')}>
-          <Stat icon={Server} label={t('dash.gameServer', { game: game.name })}>
-            <span className="flex items-center justify-between gap-2">
-              <span className={`inline-flex items-center gap-2 ${d.serverRunning ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                <StatusDot state={d.serverRunning ? 'ok' : 'idle'} />
-                {d.serverRunning ? t('console.running') : t('console.stopped')}
-              </span>
-              <ChevronRight className="size-4 text-slate-400 transition-transform group-hover:translate-x-0.5" />
-            </span>
-          </Stat>
-        </button>
-        <Stat icon={GitCommit} label={t('dash.installedCommit')}>
-          {d.lastCommit ? <span className="font-mono">{d.lastCommit.slice(0, 7)}</span> : t('dash.noneYet')}
-        </Stat>
-        <Stat icon={RefreshCw} label={t('dash.lastUpdate')}>{d.lastUpdate || t('dash.Never')}</Stat>
-      </div>
-      <SyncCard game={game} d={d} localIps={localIps} />
+      <Card title={t('dash.flowTitle')} icon={Copy} description={t('dash.flowDescription', { game: game.name })}>
+        <div className="flex items-stretch gap-2">
+          <FlowStep icon={FolderOpen} title={t('dash.flowSource', { game: game.name })} detail={d.sourcePath} footer={d.files?.join(', ')} />
+          <FlowArrow label={t('dash.flowCopy')} />
+          <FlowStep icon={FolderGit2} title={t('dash.flowTemp')} detail={d.tempPath} footer={t('dash.flowTempFooter')} />
+          <FlowArrow label={t('dash.flowPush')} />
+          <FlowStep
+            icon={Cloud}
+            title="GitHub"
+            detail={d.destinations.length === 1 ? shortRepo(d.destinations[0].repository) : t('dash.flowRepos', { count: d.destinations.length })}
+            footer={d.destinations.length > 1 ? t('dash.flowChoose') : null}
+          />
+        </div>
+      </Card>
+      <Card title={t('dash.destinations')} icon={Server} description={t(d.destinations.length > 1 ? 'dash.destinationsMany' : 'dash.destinationsOne')}>
+        <div className="-my-2 divide-y divide-slate-100 dark:divide-slate-800">
+          {d.destinations.map((dest) => (
+            <div key={dest.id} className="flex items-center gap-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{dest.name}</span>
+                  {dest.id === d.lastDestination && d.destinations.length > 1 && <Badge>{t('dash.lastChosen')}</Badge>}
+                </div>
+                <div className="truncate font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                  {shortRepo(dest.repository)} · {dest.branch} · {t('dash.flowLastPush', { value: dest.lastPush || t('dash.never') })}
+                </div>
+              </div>
+              <Button variant="ghost" icon={ExternalLink} title={t('action.openRepo')} onClick={() => push(`open-repo:${dest.id}`)} className="px-2 py-1" />
+              <Button icon={CloudUpload} disabled={client.busy} onClick={() => push(`push:${dest.id}`)} className="py-1 text-xs">{t('dash.pushHere')}</Button>
+            </div>
+          ))}
+        </div>
+      </Card>
     </>
   );
 }
 
-export default function Dashboard({ data, snapshot, logs, game: id, onNavigate, git, onGitHelp }) {
+/**
+ * All the servers of the game, with "Create new server" in the header: a row per server (status, repository,
+ * installed commit, start/stop), or a welcome when there are none yet.
+ */
+function ServersSection({ id, game, server, onNavigate, onNewServer }) {
+  const t = useT();
+  const servers = server.details.servers;
+  const run = (action, serverId) => window.api.runAction(id, 'server', action, serverId);
+  const installing = Boolean(server.details.steam.phase);
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+      <header className="flex items-center justify-between gap-4 border-b border-slate-100 bg-slate-50 px-5 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+        <button type="button" onClick={() => onNavigate('server-list')} className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-900 hover:text-orange-700 dark:text-slate-100 dark:hover:text-orange-400">
+          <List className="size-4" />
+          {t('dash.allServers', { game: game.name })}
+        </button>
+        <button type="button" onClick={onNewServer} className="flex cursor-pointer items-center gap-1.5 text-sm font-medium text-orange-700 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300">
+          <PlusCircle className="size-4" />
+          {t('dash.createServer')}
+        </button>
+      </header>
+      {servers.length ? (
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-slate-100 text-[11px] font-medium tracking-wide text-slate-500 uppercase dark:border-slate-800 dark:text-slate-400">
+              <th className="px-5 py-2 font-medium">{t('dash.colServer')}</th>
+              <th className="px-3 py-2 font-medium">{t('servers.repository')}</th>
+              <th className="px-3 py-2 font-medium">{t('dash.colCommit')}</th>
+              <th className="px-3 py-2 font-medium">{t('dash.colStatus')}</th>
+              <th className="px-5 py-2" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {servers.map((s) => (
+              <tr key={s.id}>
+                <td className="max-w-48 px-5 py-2.5">
+                  <button type="button" onClick={() => onNavigate(`srv:${s.id}:console`)} className="flex max-w-full cursor-pointer items-center gap-2 font-medium text-slate-900 hover:text-orange-700 dark:text-slate-100 dark:hover:text-orange-400" title={t('servers.open')}>
+                    <StatusDot state={s.state} className="shrink-0" />
+                    <span className="truncate">{s.name}</span>
+                  </button>
+                </td>
+                <td className="max-w-48 truncate px-3 py-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400">{shortRepo(s.repository)}</td>
+                <td className="px-3 py-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400">{s.lastCommit ? s.lastCommit.slice(0, 7) : '-'}</td>
+                <td className="max-w-56 px-3 py-2.5">
+                  <Badge tone={STATE_TONE[s.state]}><span className="inline-block max-w-48 truncate align-bottom" title={s.status}>{s.status}</span></Badge>
+                </td>
+                <td className="px-5 py-2.5 text-right">
+                  {s.running
+                    ? <Button icon={Square} disabled={s.busy || installing} onClick={() => run('stop', s.id)} className="px-2.5 py-1 text-xs">{t('console.stop')}</Button>
+                    : <Button icon={Play} disabled={s.busy || installing || !s.hasPackages} onClick={() => run('start', s.id)} className="px-2.5 py-1 text-xs">{t('console.start')}</Button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <div className="px-5 py-10 text-center">
+          <h2 className="text-lg font-medium text-slate-700 dark:text-slate-200">{t('dash.welcomeTitle', { game: game.fullName })}</h2>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{t('dash.welcomeText')}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Server role: the servers at a glance and how the new packages arrive. */
+function ServerView({ id, game, server, localIps, onNavigate, onNewServer }) {
+  const t = useT();
+  const d = server.details;
+  const running = d.servers.filter((s) => s.running).length;
+  const lastPoll = d.servers.map((s) => s.lastPoll).filter(Boolean).sort().pop();
+  return (
+    <>
+      <div className="grid grid-cols-3 gap-4">
+        <button type="button" onClick={() => onNavigate('server')} className="group cursor-pointer text-left" title={t('dash.openServer')}>
+          <Stat icon={ServerCog} label={t('dash.servers')}>
+            <span className="flex items-center justify-between gap-2">
+              <span>{t('dash.serversRunning', { running, total: d.servers.length })}</span>
+              <ChevronRight className="size-4 text-slate-400 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </Stat>
+        </button>
+        <Stat icon={Tag} label={t('dash.steamInstalled')}>
+          <span className={d.exeExists && d.steam.installed ? 'font-mono' : ''}>
+            {d.exeExists ? d.steam.installed || t('dash.steamUnknown') : t('dash.notInstalled')}
+          </span>
+        </Stat>
+        <Stat icon={RefreshCw} label={t('dash.lastCheck')}>
+          {d.sync.method === 'webhook' ? t('dash.webhookMode') : lastPoll || t('dash.Never')}
+        </Stat>
+      </div>
+      <ServersSection id={id} game={game} server={server} onNavigate={onNavigate} onNewServer={onNewServer} />
+      {d.sync.method === 'polling' ? (
+        <Card
+          title={t('dash.pollingTitle', { game: game.name })}
+          icon={RefreshCw}
+          actions={(
+            <Button icon={RefreshCw} disabled={server.busy || !d.servers.length} onClick={() => window.api.runAction(id, 'server', 'poll')} className="py-1 text-xs">
+              {t('dash.checkNow')}
+            </Button>
+          )}
+        >
+          <p className="text-sm text-slate-600 dark:text-slate-300">{t('dash.pollingEvery', { minutes: d.sync.pollMinutes })}</p>
+        </Card>
+      ) : (
+        <Card title={t('dash.webhookTitle', { game: game.name })} icon={Webhook} description={t('dash.webhookDescription')}>
+          <WebhookUrl port={d.sync.port} localIps={localIps} />
+        </Card>
+      )}
+    </>
+  );
+}
+
+export default function Dashboard({ data, snapshot, logs, game: id, onNavigate, onNewServer, git, onGitHelp }) {
   const t = useT();
   const game = GAME[id];
   const g = snapshot.games[id];
@@ -186,39 +274,22 @@ export default function Dashboard({ data, snapshot, logs, game: id, onNavigate, 
     );
   }
 
-  const actions = g.mode === 'client'
-    ? [
-      { id: 'open-repo', label: t('action.openRepo'), icon: ExternalLink },
-      { id: 'push', label: t('action.push'), icon: CloudUpload, primary: true },
-    ]
-    : [
-      { id: 'update', label: t('action.update'), icon: RefreshCw, primary: true },
-    ];
-
+  const subtitle = g.client && g.server ? 'dash.subtitleBoth' : g.client ? 'dash.subtitleClient' : 'dash.subtitleServer';
   return (
     <>
-      <PageHeader
-        title={t('dash.title')}
-        subtitle={t(g.mode === 'client' ? 'dash.subtitleClient' : 'dash.subtitleServer', { game: game.name })}
-      >
-        {actions.map((a) => (
-          <Button
-            key={a.id}
-            variant={a.primary ? 'primary' : 'secondary'}
-            icon={a.icon}
-            disabled={g.busy && a.id !== 'open-repo'}
-            onClick={() => window.api.runAction(id, a.id)}
-          >
-            {a.label}
+      <PageHeader title={t('dash.title')} subtitle={t(subtitle, { game: game.name })}>
+        {g.client && (
+          <Button variant="primary" icon={CloudUpload} disabled={g.client.busy} onClick={() => window.api.runAction(id, 'client', 'push')}>
+            {t(g.client.details.destinations.length > 1 ? 'action.pushChoose' : 'action.push')}
           </Button>
-        ))}
+        )}
       </PageHeader>
       <div className="space-y-4 px-8 pb-8">
-        {g.mode === 'client' && git && !git.found && <GitMissing onGitHelp={onGitHelp} />}
-        <StatusHero snapshot={g} />
-        {g.mode === 'client'
-          ? <ClientView game={game} g={g} s={data.settings.games[id]} />
-          : <ServerView game={game} g={g} localIps={data.localIps} onNavigate={onNavigate} />}
+        {g.client && git && !git.found && <GitMissing onGitHelp={onGitHelp} />}
+        {g.client && <StatusHero role={g.client} label={t('role.client')} />}
+        {g.client && <ClientView id={id} game={game} client={g.client} />}
+        {g.server && <StatusHero role={g.server} label={t('role.server')} />}
+        {g.server && <ServerView id={id} game={game} server={g.server} localIps={data.localIps} onNavigate={onNavigate} onNewServer={onNewServer} />}
         <RecentActivity logs={logs} onNavigate={onNavigate} />
       </div>
     </>

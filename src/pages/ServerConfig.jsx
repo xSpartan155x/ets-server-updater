@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertCircle, CheckCircle2, ExternalLink, FileText, Gamepad2, KeyRound, Loader2, Network, Plus, RotateCw, Save, Shield, Trash2, Truck, User,
+  AlertCircle, CheckCircle2, ExternalLink, FilePlus, FileText, Gamepad2, KeyRound, Loader2, Network, Plus, RotateCw, Save, Shield, Trash2, Truck, User,
   Users,
 } from 'lucide-react';
 import { Button, Card, Field, NumberInput, SecretInput, TextInput, Toggle } from '../components/ui';
@@ -124,8 +124,8 @@ function Moderators({ ids, onChange, error }) {
   );
 }
 
-/** Editor of server_config.sii of the dedicated server: values only, the rest of the file is kept. */
-export default function ServerConfig({ id, g }) {
+/** Editor of server_config.sii of one server: values only, the rest of the file is kept. busy: a job is running on it. */
+export default function ServerConfig({ game: id, server, busy }) {
   const t = useT();
   const game = GAME[id];
   const [file, setFile] = useState(null); // { file, exists, values, moderators } as read from disk
@@ -138,7 +138,7 @@ export default function ServerConfig({ id, g }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const result = await window.api.serverConfig.read(id);
+    const result = await window.api.serverConfig.read(id, server.id);
     setLoading(false);
     setErrors({});
     if (!result.ok) {
@@ -149,7 +149,7 @@ export default function ServerConfig({ id, g }) {
     setFile(result);
     setValues(result.values || {});
     setModerators(result.moderators || []);
-  }, [id]);
+  }, [id, server.id]);
 
   useEffect(() => {
     setNotice(null);
@@ -170,7 +170,7 @@ export default function ServerConfig({ id, g }) {
 
   const save = async (restart) => {
     setSaving(true);
-    const result = await window.api.serverConfig.write(id, values, moderators.map((m) => m.trim()), restart);
+    const result = await window.api.serverConfig.write(id, server.id, values, moderators.map((m) => m.trim()), restart);
     setSaving(false);
     if (result.errors) {
       setErrors(Object.fromEntries(result.errors.map((e) => [e.field, errorText(e)])));
@@ -186,6 +186,12 @@ export default function ServerConfig({ id, g }) {
     setFile((prev) => ({ ...prev, values, moderators: moderators.map((m) => m.trim()) }));
     setModerators((prev) => prev.map((m) => m.trim()));
     setNotice({ ok: true, text: t(restart ? 'cfg.savedRestart' : 'cfg.saved') });
+  };
+
+  const create = async () => {
+    const result = await window.api.serverConfig.create(id, server.id);
+    if (result.ok) await load();
+    else setNotice({ ok: false, text: result.error || '' });
   };
 
   if (loading && !file) {
@@ -205,11 +211,14 @@ export default function ServerConfig({ id, g }) {
             <p className="mt-2 max-w-lg text-sm text-slate-500 dark:text-slate-400">
               <Trans
                 k="cfg.missingText"
-                params={{ file: <code className="select-text break-all">{file?.file || g.details.configFile}</code>, game: game.name }}
+                params={{ file: <code className="select-text break-all">{file?.file || server.configFile}</code>, game: game.name }}
                 tags={{ code: (content) => <code className="rounded bg-slate-100 px-1 font-mono dark:bg-slate-800">{content}</code> }}
               />
             </p>
-            <Button icon={RotateCw} className="mt-5" onClick={load}>{t('cfg.reload')}</Button>
+            <div className="mt-5 flex gap-2">
+              <Button icon={RotateCw} onClick={load}>{t('cfg.reload')}</Button>
+              <Button variant="primary" icon={FilePlus} onClick={create}>{t('cfg.create')}</Button>
+            </div>
           </div>
         </Card>
       </div>
@@ -231,7 +240,7 @@ export default function ServerConfig({ id, g }) {
               <SecretInput value={v.password} onChange={set('password')} />
             </Field>
             <Field label={t('cfg.max_players')} hint={t('cfg.maxPlayersHint')} error={errors.max_players}>
-              <NumberInput value={v.max_players} onChange={set('max_players')} max={8} />
+              <NumberInput value={v.max_players} onChange={set('max_players')} max={128} />
             </Field>
           </div>
         </Card>
@@ -286,7 +295,7 @@ export default function ServerConfig({ id, g }) {
       <footer className="sticky bottom-0 -mx-8 border-t border-slate-200 bg-white/90 px-8 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div className="flex items-center gap-3">
           <span className="select-text min-w-0 flex-1 truncate font-mono text-xs text-slate-500 dark:text-slate-400" title={file.file}>{file.file}</span>
-          <Button variant="ghost" icon={FileText} onClick={() => window.api.serverConfig.open(id)} className="py-1 text-xs">{t('console.openFile')}</Button>
+          <Button variant="ghost" icon={FileText} onClick={() => window.api.servers.open(id, server.id, 'config')} className="py-1 text-xs">{t('console.openFile')}</Button>
           <Button variant="ghost" icon={RotateCw} onClick={load} disabled={saving} className="py-1 text-xs">{t('cfg.reload')}</Button>
         </div>
         <div className="flex items-center justify-end gap-3 pt-2">
@@ -299,7 +308,7 @@ export default function ServerConfig({ id, g }) {
             <span className="text-xs text-slate-500 dark:text-slate-400">{dirty ? t('settings.unsaved') : t('cfg.applyHint')}</span>
           )}
           <Button icon={Save} loading={saving} disabled={!dirty} onClick={() => save(false)}>{t('cfg.save')}</Button>
-          <Button variant="primary" icon={RotateCw} loading={saving} disabled={!dirty || g.busy} onClick={() => save(true)}>{t('cfg.saveRestart')}</Button>
+          <Button variant="primary" icon={RotateCw} loading={saving} disabled={!dirty || busy || !server.running} onClick={() => save(true)}>{t('cfg.saveRestart')}</Button>
         </div>
       </footer>
     </div>
