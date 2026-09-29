@@ -30,6 +30,8 @@ const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 const LOGIN_ITEM = { args: ['--hidden'] };
 const ICON_DIR = app.isPackaged ? path.join(process.resourcesPath, 'icons') : path.join(__dirname, '..', 'resources');
 const ROLES = ['client', 'server'];
+// options of the client saved by Settings; its destinations are saved by the Server pages
+const CLIENT_OWN = ['enabled', 'documents_path', 'debounce_seconds', 'commit_message'];
 
 let tray = null;
 let win = null;
@@ -557,13 +559,23 @@ function registerIpc() {
   });
 
   ipcMain.handle('save-settings', async (_event, values, autostart, imported = []) => {
-    // theme and language are saved on their own (instant switches): never overwrite them with stale form values
-    const next = normalize({ version: settings.version, games: values.games, theme: settings.theme, language: settings.language });
-    // the servers are created, changed and removed in the Server page: the form of Settings keeps them as they are,
-    // unless they come from an imported settings file (e.g. moving the servers to a new PC)
+    // Settings owns the roles and the options of the client that are not about servers: everything about servers
+    // (destinations of the client; installation, sync and servers of the server role) is saved by the Server pages
+    // and kept as it is, unless the game comes from an imported settings file (e.g. moving to a new PC)
+    const games = {};
     for (const game of GAME_IDS) {
-      if (!imported.includes(game)) next.games[game].server.servers = settings.games[game].server.servers;
+      const form = values.games[game];
+      const saved = settings.games[game];
+      games[game] = imported.includes(game) ? form : {
+        client: { ...saved.client, ...Object.fromEntries(CLIENT_OWN.map((key) => [key, form.client[key]])) },
+        server: { ...saved.server, enabled: form.server.enabled },
+      };
+      if (games[game].server.enabled && !String(games[game].server.install_dir || '').trim()) {
+        games[game].server.install_dir = suggestedInstallDir(game);
+      }
     }
+    // theme and language are saved on their own (instant switches): never overwrite them with stale form values
+    const next = normalize({ version: settings.version, games, theme: settings.theme, language: settings.language });
     const errors = validateSettings(next);
     if (errors.length) return { ok: false, errors };
     if (anyBusy()) return { ok: false, errors: [t('err.busySave')] };
@@ -576,28 +588,32 @@ function registerIpc() {
     return { ok: true, snapshot: snapshot() };
   });
 
+  // options of one role of a game, from the Server pages: the servers the client sends to, or the installation,
+  // updates, sync and shared rules of the server role (its servers are created, changed and removed on their own).
+  // Only that role is restarted; the dedicated servers keep running.
+  ipcMain.handle('save-role', async (_event, game, role, values) => {
+    if (!settings.games[game] || !ROLES.includes(role)) return { ok: false, errors: [] };
+    const games = JSON.parse(JSON.stringify(settings.games));
+    games[game][role] = { ...games[game][role], ...values, enabled: settings.games[game][role].enabled };
+    if (role === 'server') games[game].server.servers = settings.games[game].server.servers;
+    const next = normalize({ version: settings.version, games, theme: settings.theme, language: settings.language });
+    const errors = validateSettings(next);
+    if (errors.length) return { ok: false, errors };
+    if (engines[game]?.[role]?.busy) return { ok: false, errors: [t('err.busySave')] };
+
+    settings = next;
+    saveSettings(settings);
+    stopEngine(game, role);
+    if (settings.games[game][role].enabled) await startEngine(game, role);
+    broadcastState();
+    return { ok: true };
+  });
+
   ipcMain.handle('run-action', (_event, game, role, id, server) => runAction(game, role, id, server));
 
   ipcMain.handle('choose-destination', (_event, game, id) => {
     delete choices[game];
     engines[game]?.client?.choose(id || null);
-  });
-
-  // options of the updates of the installation (Server page): saved and applied right away, the servers keep running
-  ipcMain.handle('set-server-updates', (_event, game, values) => {
-    if (!settings.games[game]) return { ok: false, error: '' };
-    const next = { ...settings.games[game].server };
-    if ('auto_update' in values) next.auto_update = Boolean(values.auto_update);
-    if ('update_hours' in values) {
-      const hours = values.update_hours;
-      if (!Number.isInteger(hours) || hours < 0) return { ok: false, error: t('err.hours') };
-      next.update_hours = hours;
-    }
-    settings.games[game].server = next;
-    saveSettings(settings);
-    hostOf(game)?.updateOptions(next);
-    broadcastState();
-    return { ok: true };
   });
 
   ipcMain.handle('server-plan', (_event, game, name) => serverPlan(game, name));

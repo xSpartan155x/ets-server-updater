@@ -73,7 +73,12 @@ class ClientEngine extends Engine {
   async start() {
     if (!this.source) throw new LocalizedError('err.docsNotSet', { game: this.game.name });
     if (!fs.existsSync(this.source)) throw new LocalizedError('err.docsNotFound', { game: this.game.name, path: this.source });
-    if (!this.destinations.length) throw new LocalizedError('err.noDestinations');
+    if (!this.destinations.length) {
+      // not an error: the servers to send to are added in the Server page, after the role is chosen
+      this.log.info('Client role, no server to send to yet');
+      this.setStatus('status.noDestinations', 'idle');
+      return;
+    }
     const git = await findGit();
     if (!git) throw new LocalizedError('err.gitMissing');
     this.gitExe = git.path;
@@ -101,6 +106,7 @@ class ClientEngine extends Engine {
   }
 
   actions() {
+    if (!this.destinations.length) return [];
     return [{ id: 'push', label: t(this.destinations.length > 1 ? 'action.pushChoose' : 'action.push') }];
   }
 
@@ -124,6 +130,7 @@ class ClientEngine extends Engine {
 
   /** push: to the only destination, or ask which one; push:<id>: to that destination. */
   runAction(id) {
+    if (!this.destinations.length) return;
     if (id === 'push') {
       if (this.destinations.length === 1) this.sync(this.destinations[0].id, true);
       else this.ask(null, true);

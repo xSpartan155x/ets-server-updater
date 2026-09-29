@@ -10,11 +10,11 @@ const subscribe = (channel) => (callback) => {
 contextBridge.exposeInMainWorld('api', {
   getState: () => ipcRenderer.invoke('get-state'),
   // imported: ids of the games whose servers come from an imported settings file
+  saveRole: (game, role, values) => ipcRenderer.invoke('save-role', game, role, values),
   saveSettings: (values, autostart, imported) => ipcRenderer.invoke('save-settings', values, autostart, imported),
   // role: 'client' | 'server'; server: id of a server for the actions of one server
   runAction: (game, role, id, server) => ipcRenderer.invoke('run-action', game, role, id, server),
   chooseDestination: (game, id) => ipcRenderer.invoke('choose-destination', game, id),
-  setServerUpdates: (game, values) => ipcRenderer.invoke('set-server-updates', game, values),
   servers: {
     plan: (game, name) => ipcRenderer.invoke('server-plan', game, name),
     create: (game, form) => ipcRenderer.invoke('server-create', game, form),

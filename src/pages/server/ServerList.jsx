@@ -1,80 +1,59 @@
+import { useState } from 'react';
 import {
-  AlertTriangle, FileCog, FolderOpen, GitCommit, HardDriveDownload, Play, Plus, RefreshCw, RotateCw, ServerCog, SlidersHorizontal, Square,
-  SquareTerminal,
+  AlertTriangle, ChevronRight, CloudDownload, FolderOpen, GitCommit, HardDriveDownload, Play, Plus, RotateCw, ServerCog, Square,
 } from 'lucide-react';
-import { Badge, Button, Card, STATE_TONE, StatusDot } from '../../components/ui';
+import { Button, Card, SearchInput, StatusDot, matches } from '../../components/ui';
 import { shortRepo } from '../../components/DestinationChooser';
 import { GAME } from '../../games';
 import { useT } from '../../i18n';
 
-function Detail({ label, children, mono, title }) {
+const FILTERS = ['all', 'running', 'stopped'];
+
+/** One server in a row: status, name and repository; icon buttons for its controls; a click opens its page. */
+function ServerRow({ game, server, hostBusy, onOpen }) {
+  const t = useT();
+  const run = (action) => window.api.runAction(game, 'server', action, server.id);
+  const busy = server.busy || hostBusy;
+  const warning = !server.hasPackages ? t('servers.noPackages') : !server.hasConfig ? t('servers.noConfig') : '';
+  const icon = 'px-2 py-1';
   return (
-    <div className="min-w-0">
-      <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`mt-0.5 truncate text-xs text-slate-800 dark:text-slate-200 ${mono ? 'select-text font-mono' : ''}`} title={title}>{children}</div>
+    <div className="group flex items-center gap-3 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left" title={t('servers.open')}>
+        <StatusDot state={server.state} className="shrink-0" />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-medium text-slate-900 group-hover:text-orange-700 dark:text-slate-100 dark:group-hover:text-orange-400">{server.name}</span>
+            {warning && <span title={warning} className="shrink-0 text-amber-500"><AlertTriangle className="size-3.5" /></span>}
+          </span>
+          <span className="block truncate font-mono text-[11px] text-slate-500 dark:text-slate-400">
+            {shortRepo(server.repository)} · {server.lastCommit ? server.lastCommit.slice(0, 7) : t('dash.noneYet')}
+          </span>
+        </span>
+        <span className="hidden w-56 shrink-0 truncate text-xs text-slate-500 lg:block dark:text-slate-400" title={server.status}>{server.status}</span>
+      </button>
+      <div className="flex shrink-0 items-center gap-1">
+        {server.running
+          ? <Button variant="ghost" icon={Square} disabled={busy} onClick={() => run('stop')} title={t('console.stop')} className={icon} />
+          : <Button variant="ghost" icon={Play} disabled={busy || !server.hasPackages} onClick={() => run('start')} title={t('console.start')} className={`${icon} text-emerald-600 dark:text-emerald-400`} />}
+        <Button variant="ghost" icon={RotateCw} disabled={busy || !server.running} onClick={() => run('restart')} title={t('console.restart')} className={icon} />
+        <Button variant="ghost" icon={CloudDownload} disabled={busy} onClick={() => run('update')} title={t('servers.updateTitle')} className={icon} />
+        <Button variant="ghost" icon={FolderOpen} onClick={() => window.api.servers.open(game, server.id, 'home')} title={t('servers.openHome')} className={icon} />
+        <ChevronRight className="size-4 text-slate-300 dark:text-slate-600" />
+      </div>
     </div>
   );
 }
 
-/** One server: status, where it lives, its repository and what it last installed, with its controls. */
-function ServerCard({ game, server, hostBusy, onOpen }) {
-  const t = useT();
-  const run = (action) => window.api.runAction(game, 'server', action, server.id);
-  const busy = server.busy || hostBusy;
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
-      <header className="flex items-center gap-3 border-b border-slate-100 px-5 py-3 dark:border-slate-800">
-        <StatusDot state={server.state} className="shrink-0" />
-        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
-          <button type="button" onClick={() => onOpen('console')} className="max-w-full cursor-pointer truncate text-slate-900 hover:text-orange-700 dark:text-slate-100 dark:hover:text-orange-400" title={t('servers.open')}>
-            {server.name}
-          </button>
-        </h2>
-        <Badge tone={STATE_TONE[server.state]}>
-          <span className="inline-block max-w-72 truncate align-bottom" title={server.status}>{server.status}</span>
-        </Badge>
-      </header>
-      <div className="space-y-4 p-5">
-        {!server.hasPackages && (
-          <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            {t('servers.noPackages')}
-          </p>
-        )}
-        {server.hasPackages && !server.hasConfig && (
-          <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            {t('servers.noConfig')}
-          </p>
-        )}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-          <Detail label={t('new.homedir')} mono title={server.homedir}>{server.homedir}</Detail>
-          <Detail label={t('servers.repository')} mono>{shortRepo(server.repository)} · {server.branch}</Detail>
-          <Detail label={t('dash.installedCommit')} mono>{server.lastCommit ? server.lastCommit.slice(0, 7) : t('dash.noneYet')}</Detail>
-          <Detail label={t('dash.lastUpdate')}>{server.lastUpdate || t('dash.Never')}</Detail>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {server.running
-            ? <Button icon={Square} disabled={busy} onClick={() => run('stop')} className="py-1.5 text-xs">{t('console.stop')}</Button>
-            : <Button variant="primary" icon={Play} disabled={busy || !server.hasPackages} onClick={() => run('start')} className="py-1.5 text-xs">{t('console.start')}</Button>}
-          <Button icon={RotateCw} disabled={busy || !server.running} onClick={() => run('restart')} className="py-1.5 text-xs">{t('console.restart')}</Button>
-          <Button icon={RefreshCw} disabled={busy} onClick={() => run('update')} className="py-1.5 text-xs" title={t('servers.updateTitle')}>{t('servers.update')}</Button>
-          <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-800" />
-          <Button variant="ghost" icon={SquareTerminal} onClick={() => onOpen('console')} className="py-1.5 text-xs">{t('server.tab.console')}</Button>
-          <Button variant="ghost" icon={FileCog} onClick={() => onOpen('config')} className="py-1.5 text-xs">{t('server.tab.config')}</Button>
-          <Button variant="ghost" icon={SlidersHorizontal} onClick={() => onOpen('settings')} className="py-1.5 text-xs">{t('server.tab.settings')}</Button>
-          <Button variant="ghost" icon={FolderOpen} onClick={() => window.api.servers.open(game, server.id, 'home')} className="py-1.5 text-xs" title={t('servers.openHome')} />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/** Servers of the game: the installation state, a card per server and the button of a new one. */
-export default function ServerList({ game, host, onNew, onOpen }) {
+/** Servers of the game: the installation state, a searchable row per server and the button of a new one. */
+export default function ServerList({ game, host, onNew, onOpen, onSettings }) {
   const t = useT();
   const d = host.details;
   const servers = d.servers;
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
+  const visible = servers.filter((s) => (filter === 'all' || (filter === 'running') === Boolean(s.running))
+    && matches(query, s.name, s.repository, s.status));
+  const running = servers.filter((s) => s.running).length;
   return (
     <div className="space-y-4">
       {!d.exeExists && (
@@ -89,15 +68,38 @@ export default function ServerList({ game, host, onNew, onOpen }) {
           </Button>
         </div>
       )}
-      {servers.length ? servers.map((server) => (
-        <ServerCard
-          key={server.id}
-          game={game}
-          server={server}
-          hostBusy={Boolean(d.steam.phase)}
-          onOpen={(tab) => onOpen(server.id, tab)}
-        />
-      )) : (
+      {servers.length ? (
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+          <header className="flex items-center gap-3 border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
+            <SearchInput value={query} onChange={setQuery} placeholder={t('servers.search')} className="w-64" />
+            <div className="inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800/70">
+              {FILTERS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setFilter(id)}
+                  className={`cursor-pointer rounded-md px-2.5 py-1 text-xs font-medium ${filter === id
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-950 dark:text-slate-100'
+                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                >
+                  {t(`servers.filter.${id}`)}
+                </button>
+              ))}
+            </div>
+            <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
+              {query || filter !== 'all'
+                ? t('ui.shownOf', { shown: visible.length, total: servers.length })
+                : t('dash.serversRunning', { running, total: servers.length })}
+            </span>
+          </header>
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {visible.map((server) => (
+              <ServerRow key={server.id} game={game} server={server} hostBusy={Boolean(d.steam.phase)} onOpen={() => onOpen(server.id, 'console')} />
+            ))}
+          </div>
+          {!visible.length && <p className="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">{t('ui.noResults')}</p>}
+        </section>
+      ) : (
         <Card>
           <div className="flex flex-col items-center py-10 text-center">
             <div className="mb-4 rounded-full bg-orange-50 p-4 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400">
@@ -113,6 +115,9 @@ export default function ServerList({ game, host, onNew, onOpen }) {
         <p className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           <GitCommit className="size-3.5" />
           {d.sync.method === 'webhook' ? t('servers.syncWebhook', { port: d.sync.port }) : t('servers.syncPolling', { minutes: d.sync.pollMinutes })}
+          <button type="button" onClick={onSettings} className="cursor-pointer font-medium text-orange-700 hover:underline dark:text-orange-400">
+            {t('servers.syncChange')}
+          </button>
         </p>
       )}
     </div>

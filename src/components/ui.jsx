@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy, Eye, EyeOff, FolderOpen, Globe, Loader2, X } from 'lucide-react';
+import {
+  AlertCircle, Check, CheckCircle2, ChevronRight, Copy, Eye, EyeOff, FolderOpen, Globe, Loader2, Save, Search, X,
+} from 'lucide-react';
 import { Trans, useT } from '../i18n';
 
 export const STATE_STYLES = {
@@ -311,3 +313,101 @@ export function Badge({ tone = 'slate', children }) {
 
 /** Tone of a Badge for a state of the engines ('ok' | 'busy' | 'error' | 'idle'). */
 export const STATE_TONE = { ok: 'green', busy: 'blue', error: 'red', idle: 'slate' };
+
+/** Big choice button with icon, title and one line of text (roles of the game, polling or webhook). */
+export function OptionCard({ icon: Icon, title, text, active, onClick, tooltip, check }) {
+  return (
+    <button
+      type="button"
+      role={check ? 'checkbox' : undefined}
+      aria-checked={check ? active : undefined}
+      title={tooltip}
+      onClick={onClick}
+      className={`flex cursor-pointer gap-3 rounded-xl border p-4 text-left transition-all ${
+        active
+          ? 'border-orange-500 bg-orange-50/60 ring-2 ring-orange-500/20 dark:bg-orange-500/10'
+          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800/50'
+      }`}
+    >
+      <div className={`h-fit rounded-lg p-2 ${active ? 'bg-orange-600 text-white dark:bg-orange-500' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+        <Icon className="size-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</div>
+        <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{text}</div>
+      </div>
+      {check && (
+        <span className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border ${active ? 'border-orange-600 bg-orange-600 text-white dark:border-orange-500 dark:bg-orange-500' : 'border-slate-300 dark:border-slate-600'}`}>
+          {active && <CheckCircle2 className="size-3.5" />}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** Collapsed box of the options that rarely need a change. */
+export function Advanced({ children }) {
+  const t = useT();
+  return (
+    <details className="group mt-5 rounded-lg border border-slate-200 dark:border-slate-800">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
+        <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
+        {t('settings.advanced')}
+      </summary>
+      <div className="grid grid-cols-2 gap-4 border-t border-slate-100 p-4 dark:border-slate-800">{children}</div>
+    </details>
+  );
+}
+
+/** Footer of a form, at the bottom of the window while the form scrolls: errors, saved / unsaved and Save. */
+export function SaveBar({ dirty, saved, saving, errors = [], onSave, label, children }) {
+  const t = useT();
+  return (
+    <footer className="sticky bottom-0 border-t border-slate-200 bg-white/90 px-8 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+      {errors.length > 0 && (
+        <div className="mb-3 flex gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <ul className="space-y-0.5">{errors.map((e) => <li key={e}>{e}</li>)}</ul>
+        </div>
+      )}
+      <div className="flex items-center justify-end gap-4">
+        {children}
+        {saved && !dirty && (
+          <span className="flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2 className="size-4" /> {t('settings.saved')}
+          </span>
+        )}
+        {dirty && <span className="text-xs text-slate-500 dark:text-slate-400">{t('settings.unsaved')}</span>}
+        <Button variant="primary" icon={Save} loading={saving} disabled={!dirty} onClick={onSave}>{label || t('edit.save')}</Button>
+      </div>
+    </footer>
+  );
+}
+
+/** Search box of a list: filters as you type, X clears it. */
+export function SearchInput({ value, onChange, placeholder, className = '' }) {
+  const t = useT();
+  return (
+    <div className={`relative ${className}`}>
+      <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-slate-400" />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Escape') onChange(''); }}
+        placeholder={placeholder || t('ui.search')}
+        className="w-full select-text rounded-lg border border-slate-300 bg-white py-1.5 pr-7 pl-8 text-xs text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+      />
+      {value && (
+        <button type="button" onClick={() => onChange('')} title={t('ui.clear')} className="absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+          <X className="size-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Whether `query` (words, any order, no case) is found in the texts. */
+export function matches(query, ...texts) {
+  const haystack = texts.filter(Boolean).join(' ').toLowerCase();
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean).every((word) => haystack.includes(word));
+}

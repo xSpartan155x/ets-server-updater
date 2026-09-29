@@ -338,7 +338,6 @@ function repositoryErrors(item, label) {
 function clientErrors(c) {
   const errors = [];
   if (!c.documents_path.trim()) errors.push(t('err.required', { label: t('field.documents') }));
-  if (!c.destinations.length) errors.push(t('err.noDestinations'));
   const names = new Set();
   for (const d of c.destinations) {
     const label = d.name.trim() || t('field.destination');

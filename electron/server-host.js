@@ -107,15 +107,6 @@ class ServerHost extends Engine {
     return ['error', 'busy'].find((s) => states.includes(s)) || 'ok';
   }
 
-  /** New options of the updates of the installation, applied without restarting (the servers keep running). */
-  updateOptions(settings) {
-    this.s = { ...this.s, auto_update: settings.auto_update, update_hours: settings.update_hours };
-    for (const timer of this.steamTimers || []) clearTimeout(timer);
-    this.steamTimers = [];
-    if (!this.stopped) this.scheduleSteamChecks();
-    this.emit('change');
-  }
-
   // ------------------------------------------------------------------ processes
 
   /** Processes of the dedicated server of this game: [{ pid, exe, homedir }]. */
