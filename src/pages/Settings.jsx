@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  AlertCircle, CheckCircle2, ChevronRight, FileDown, FileUp, FolderGit2, Info, Laptop, Save, Server, Settings2,
+  AlertCircle, CheckCircle2, ChevronRight, FileDown, FileUp, FolderGit2, Info, Laptop, RefreshCw, Save, Server, Settings2,
   Sparkles, SlidersHorizontal, Terminal, Webhook, X,
 } from 'lucide-react';
 import {
@@ -13,6 +13,11 @@ import { Trans, useT } from '../i18n';
 const MODES = [
   { id: 'client', icon: Laptop, text: 'settings.clientText' },
   { id: 'server', icon: Server, text: 'settings.serverText' },
+];
+
+const SYNC_METHODS = [
+  { id: 'polling', icon: RefreshCw },
+  { id: 'webhook', icon: Webhook },
 ];
 
 const LANGUAGES = [
@@ -62,6 +67,30 @@ function Segmented({ options, value, onChange }) {
   );
 }
 
+/** Big choice button with icon, title and one line of text (mode of the game, polling or webhook). */
+function OptionCard({ icon: Icon, title, text, active, onClick, tooltip }) {
+  return (
+    <button
+      type="button"
+      title={tooltip}
+      onClick={onClick}
+      className={`flex gap-3 rounded-xl border p-4 text-left transition-all ${
+        active
+          ? 'border-orange-500 bg-orange-50/60 ring-2 ring-orange-500/20 dark:bg-orange-500/10'
+          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800/50'
+      }`}
+    >
+      <div className={`h-fit rounded-lg p-2 ${active ? 'bg-orange-600 text-white dark:bg-orange-500' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+        <Icon className="size-5" />
+      </div>
+      <div>
+        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</div>
+        <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{text}</div>
+      </div>
+    </button>
+  );
+}
+
 /** Settings of one game: mode, repository and the fields of the chosen mode. */
 /** onClientChosen: called when Client is picked (the Git popup opens if Git is missing). */
 function GameSettings({ game, values, set, localIps, onClientChosen }) {
@@ -76,31 +105,21 @@ function GameSettings({ game, values, set, localIps, onClientChosen }) {
         actions={<GameIcon id={game.id} className="size-9" />}
       >
         <div className="grid grid-cols-2 gap-3">
-          {MODES.map(({ id, icon: Icon, text }) => {
+          {MODES.map(({ id, icon, text }) => {
             const active = values.mode === id;
             return (
-              <button
+              <OptionCard
                 key={id}
-                type="button"
-                title={active ? t('settings.modeClear') : undefined}
+                icon={icon}
+                title={t(`mode.${id}`)}
+                text={t(text, { game: name })}
+                active={active}
+                tooltip={active ? t('settings.modeClear') : undefined}
                 onClick={() => {
                   set('mode')(active ? '' : id); // a second click leaves the game empty (not configured)
                   if (!active && id === 'client') onClientChosen();
                 }}
-                className={`flex gap-3 rounded-xl border p-4 text-left transition-all ${
-                  active
-                    ? 'border-orange-500 bg-orange-50/60 ring-2 ring-orange-500/20 dark:bg-orange-500/10'
-                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800/50'
-                }`}
-              >
-                <div className={`h-fit rounded-lg p-2 ${active ? 'bg-orange-600 text-white dark:bg-orange-500' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
-                  <Icon className="size-5" />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t(`mode.${id}`)}</div>
-                  <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t(text, { game: name })}</div>
-                </div>
-              </button>
+              />
             );
           })}
         </div>
@@ -200,37 +219,61 @@ function GameSettings({ game, values, set, localIps, onClientChosen }) {
             </Advanced>
           </Card>
 
-          <Card title={t('settings.webhookTitle', { game: name })} icon={Webhook} description={t('settings.webhookDescription')}>
+          <Card title={t('settings.syncTitle', { game: name })} icon={RefreshCw} description={t('settings.syncDescription')}>
             <div className="grid grid-cols-2 gap-4">
-              <Field label={t('settings.port')} hint={t('settings.portHint', { port: game.defaultPort })}>
-                <NumberInput value={values.webhook_port} onChange={set('webhook_port')} />
-              </Field>
-              <div />
-              <div className="col-span-2">
-                <Field label={t('settings.payloadUrl')}><WebhookUrl port={values.webhook_port} localIps={localIps} /></Field>
-              </div>
-              <div className="col-span-2">
-                <Field label={t('settings.secret')} hint={t('settings.secretHint')}>
-                  <SecretInput
-                    value={values.webhook_secret}
-                    onChange={set('webhook_secret')}
-                    extra={(reveal) => (
-                      <Button icon={Sparkles} onClick={() => { set('webhook_secret')(randomSecret()); reveal(); }}>{t('settings.generate')}</Button>
-                    )}
+              <div className="col-span-2 grid grid-cols-2 gap-3">
+                {SYNC_METHODS.map(({ id, icon }) => (
+                  <OptionCard
+                    key={id}
+                    icon={icon}
+                    title={t(`sync.${id}`)}
+                    text={t(`sync.${id}Text`)}
+                    active={values.sync_method === id}
+                    onClick={() => set('sync_method')(id)}
                   />
-                </Field>
+                ))}
               </div>
+              {values.sync_method === 'polling' ? (
+                <div className="col-span-2">
+                  <Field label={t('settings.pollMinutes')} hint={t('settings.pollMinutesHint')}>
+                    <NumberInput value={values.poll_minutes} onChange={set('poll_minutes')} />
+                  </Field>
+                </div>
+              ) : (
+                <>
+                  <Field label={t('settings.port')} hint={t('settings.portHint', { port: game.defaultPort })}>
+                    <NumberInput value={values.webhook_port} onChange={set('webhook_port')} />
+                  </Field>
+                  <div />
+                  <div className="col-span-2">
+                    <Field label={t('settings.payloadUrl')} hint={t('settings.webhookDescription')}><WebhookUrl port={values.webhook_port} localIps={localIps} /></Field>
+                  </div>
+                  <div className="col-span-2">
+                    <Field label={t('settings.secret')} hint={t('settings.secretHint')}>
+                      <SecretInput
+                        value={values.webhook_secret}
+                        onChange={set('webhook_secret')}
+                        extra={(reveal) => (
+                          <Button icon={Sparkles} onClick={() => { set('webhook_secret')(randomSecret()); reveal(); }}>{t('settings.generate')}</Button>
+                        )}
+                      />
+                    </Field>
+                  </div>
+                </>
+              )}
               <div className="col-span-2">
                 <Field label={t('settings.token')} hint={t('settings.tokenHint')}>
                   <SecretInput value={values.github_token} onChange={set('github_token')} placeholder="github_pat_..." />
                 </Field>
               </div>
             </div>
-            <Advanced>
-              <Field label={t('settings.listen')} hint={t('settings.listenHint')}>
-                <TextInput value={values.webhook_host} onChange={set('webhook_host')} />
-              </Field>
-            </Advanced>
+            {values.sync_method === 'webhook' && (
+              <Advanced>
+                <Field label={t('settings.listen')} hint={t('settings.listenHint')}>
+                  <TextInput value={values.webhook_host} onChange={set('webhook_host')} />
+                </Field>
+              </Advanced>
+            )}
           </Card>
         </>
       )}

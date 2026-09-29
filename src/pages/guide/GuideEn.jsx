@@ -4,11 +4,11 @@ export default function GuideEn() {
   return (
     <>
       <p>This guide explains step by step how to set up <strong>ETS2 Package Sync</strong> on the PC you export the packages from (<strong>Client</strong>) and on the PC that runs the dedicated server (<strong>Server</strong>).</p>
-      <p>The app manages both <strong>Euro Truck Simulator 2</strong> (ETS2) and <strong>American Truck Simulator</strong> (ATS), also together on the same PC: each game has its own mode, repository and webhook. The steps are the same for both games; where something differs, it is pointed out.</p>
+      <p>The app manages both <strong>Euro Truck Simulator 2</strong> (ETS2) and <strong>American Truck Simulator</strong> (ATS), also together on the same PC: each game has its own mode and repository. The steps are the same for both games; where something differs, it is pointed out.</p>
       <p>Once done, every time you export the packages from the game, the dedicated server updates and restarts by itself.</p>
       <pre><code>{`Client PC (you play)         GitHub                  Server PC (dedicated server)
-export_server_packages  -->  repository  --webhook-->  downloads the files, stops ETS2,
-the app pushes                                         replaces them, restarts ETS2`}</code></pre>
+export_server_packages  -->  repository  <--checks--  downloads the files, stops ETS2,
+the app pushes                           (or webhook)  replaces them, restarts ETS2`}</code></pre>
       <h2 id="contents">Contents</h2>
       <ol>
       <li><a href="#1-requirements">Requirements</a></li>
@@ -16,8 +16,8 @@ the app pushes                                         replaces them, restarts E
       <li><a href="#3-install-the-app">Install the app</a></li>
       <li><a href="#4-set-up-the-client">Set up the Client</a></li>
       <li><a href="#5-set-up-the-server">Set up the Server</a></li>
-      <li><a href="#6-open-the-webhook-port">Open the webhook port</a></li>
-      <li><a href="#7-create-the-webhook-on-github">Create the webhook on GitHub</a></li>
+      <li><a href="#6-open-the-webhook-port">Open the webhook port</a> (webhook only)</li>
+      <li><a href="#7-create-the-webhook-on-github">Create the webhook on GitHub</a> (webhook only)</li>
       <li><a href="#8-token-for-private-repositories">Token for private repositories</a></li>
       <li><a href="#9-full-test">Full test</a></li>
       <li><a href="#10-server-page">Server page: control, console and updates</a></li>
@@ -43,7 +43,7 @@ the app pushes                                         replaces them, restarts E
       </tr>
       <tr>
       <td>Server PC</td>
-      <td>A working ETS2 dedicated server (with its <code>server_config.sii</code> and the Steam <code>server_logon_token</code>), the possibility to open a port on the router</td>
+      <td>A working ETS2 dedicated server (with its <code>server_config.sii</code> and the Steam <code>server_logon_token</code>). Only with the webhook: the possibility to open a port on the router</td>
       </tr>
       </tbody></table>
       <blockquote>
@@ -205,17 +205,44 @@ server_packages.dat binary`}</code></pre>
       <td>the log shown in <strong>Server → Console</strong>. Empty = <code>server.log.txt</code> next to the <code>.sii</code></td>
       </tr>
       </tbody></table>
-      <h3 id="53-webhook">5.3 Webhook</h3>
-      <p>In the <strong>GitHub webhook</strong> card:</p>
+      <h3 id="53-new-packages">5.3 Periodic check or webhook</h3>
+      <p>In the <strong>New packages from GitHub</strong> card choose how the Server finds out that the Client pushed new packages:</p>
+      <table>
+      <thead>
+      <tr>
+      <th></th>
+      <th>Periodic check</th>
+      <th>Webhook</th>
+      </tr>
+      </thead>
+      <tbody><tr>
+      <td>How it works</td>
+      <td>the app asks GitHub for a new commit every few minutes</td>
+      <td>GitHub tells the Server as soon as the push arrives</td>
+      </tr>
+      <tr>
+      <td>Update time</td>
+      <td>at most the chosen interval (default 5 minutes)</td>
+      <td>a few seconds</td>
+      </tr>
+      <tr>
+      <td>What it needs</td>
+      <td>nothing: no ports to open, no webhook on GitHub</td>
+      <td>a port opened on firewall and router (section 6) and the webhook on GitHub (section 7)</td>
+      </tr>
+      </tbody></table>
+      <Shot name="server-sync" alt="New packages from GitHub card" />
+      <p><strong>Periodic check</strong> (recommended if you cannot or do not want to open ports on the router): set <strong>Check GitHub every</strong> in minutes (at least 1). Without a token GitHub accepts 60 requests per hour from the same PC: to check more often than every 5 minutes, or with ETS2 and ATS together at short intervals, set the <strong>GitHub token</strong>. Sections 6 and 7 are not needed.</p>
+      <p><strong>Webhook</strong>:</p>
       <ol>
       <li><strong>Port</strong>: keep the proposed one, <code>8787</code> for ETS2 and <code>8788</code> for ATS (each server needs its own port; change it only if something else already uses it).</li>
       <li><strong>Webhook secret</strong>: click <strong>Generate</strong>. Then click the eye icon and copy the value: you need it on GitHub (section 7).</li>
-      <li><strong>GitHub token</strong>: only if the repository is <strong>private</strong> (see section 8).</li>
       <li><strong>Payload URL</strong>: click <strong>Detect public IP</strong> to get the full address to paste on GitHub, then <strong>Copy</strong>.</li>
       </ol>
-      <Shot name="server-webhook" alt="GitHub webhook card" />
+      <Shot name="server-webhook" alt="Webhook fields" />
+      <p>In both cases the <strong>GitHub token</strong> is needed only if the repository is <strong>private</strong> (see section 8).</p>
       <h3 id="54-save">5.4 Save</h3>
-      <p>Click <strong>Save settings</strong>. The Dashboard shows the status of the server, the installed commit and the Payload URL of the webhook. To see the other game, choose it in the menu at the top left.</p>
+      <p>Click <strong>Save settings</strong>. The Dashboard shows the status of the server, the installed commit and, depending on your choice, the time of the last GitHub check or the Payload URL of the webhook. To see the other game, choose it in the menu at the top left.</p>
       <Shot name="server-dashboard" alt="Server Dashboard" />
       <ul>
       <li><strong>Update Now</strong>: downloads the latest commit from GitHub and installs it right away (also useful to test the configuration).</li>
@@ -252,7 +279,7 @@ server_packages.dat binary`}</code></pre>
       <td><code>270880</code></td>
       </tr>
       </tbody></table>
-      <p>Each game uses its own repository, webhook secret and webhook on GitHub. In the <strong>Logs</strong> page the lines start with <code>[ETS2]</code> or <code>[ATS]</code>; the notifications show the name of the game.</p>
+      <p>Each game uses its own repository and chooses on its own between periodic check and webhook; with the webhook each one has its own secret and its own webhook on GitHub (the port must be opened only for the games that use the webhook). In the <strong>Logs</strong> page the lines start with <code>[ETS2]</code> or <code>[ATS]</code>; the notifications show the name of the game.</p>
       <h3 id="56-server-updates-steamcmd">5.6 Updates of the dedicated server (SteamCMD)</h3>
       <p>When SCS releases a game update, the dedicated server must be updated too. The Server PC does it by itself with <strong>SteamCMD</strong>, without the Steam client and without an account: the dedicated servers of ETS2 and ATS are downloaded anonymously.</p>
       <ul>
@@ -267,6 +294,9 @@ server_packages.dat binary`}</code></pre>
       </blockquote>
       <hr />
       <h2 id="6-open-the-webhook-port">6. Open the webhook port</h2>
+      <blockquote>
+      <p>Only if you chose the <strong>Webhook</strong> (section 5.3). With the periodic check skip to section 8.</p>
+      </blockquote>
       <p>GitHub must reach the Server PC from the internet on the webhook port: 8787 for ETS2, 8788 for ATS.</p>
       <ol>
       <li><p><strong>Windows Firewall</strong>: open the <em>Command Prompt</em> <strong>as administrator</strong> and run:</p>
@@ -283,7 +313,7 @@ server_packages.dat binary`}</code></pre>
       <p>If your public IP changes often, use a dynamic DNS service (e.g. DuckDNS, No-IP) and put the name instead of the IP in the Payload URL.</p>
       </blockquote>
       <h2 id="7-create-the-webhook-on-github">7. Create the webhook on GitHub</h2>
-      <p>Each game has its own repository, so its own webhook: with ETS2 and ATS repeat these steps in the repository of each game, with the Payload URL and the secret of that game.</p>
+      <p>Only with the <strong>Webhook</strong>. Each game has its own repository, so its own webhook: with ETS2 and ATS repeat these steps in the repository of each game, with the Payload URL and the secret of that game.</p>
       <ol>
       <li><p>In the repository on GitHub go to <strong>Settings → Webhooks → Add webhook</strong>.</p>
       </li>
@@ -354,7 +384,7 @@ server_packages.dat binary`}</code></pre>
       </tr>
       </tbody></table>
       <h2 id="8-token-for-private-repositories">8. Token for private repositories</h2>
-      <p>Needed <strong>only on the Server</strong> and <strong>only if the repository is private</strong>. The Client does not need it.</p>
+      <p>Needed <strong>only on the Server</strong> and <strong>only if the repository is private</strong> (or, with the periodic check, to check more often than every 5 minutes). The Client does not need it.</p>
       <ol>
       <li><p>On GitHub: avatar at the top right → <strong>Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token</strong> (direct link: <a href="https://github.com/settings/personal-access-tokens/new">https://github.com/settings/personal-access-tokens/new</a>).</p>
       </li>
@@ -402,7 +432,7 @@ server_packages.dat binary`}</code></pre>
       <ol>
       <li>On the <strong>Server</strong> click <strong>Update Now</strong>: the <strong>Logs</strong> must show <code>[ETS2] Manual update: latest commit on main is ...</code> and then the installation.</li>
       <li>On the <strong>Client</strong> run <code>export_server_packages</code> in ETS2 (or <strong>Push Now</strong> after changing something).</li>
-      <li>On the <strong>Server</strong>, within a few seconds: the webhook arrives, the files are downloaded and verified, ETS2 is stopped, the old files go to the backup, the new ones are installed and ETS2 starts again.</li>
+      <li>On the <strong>Server</strong>, within a few seconds with the webhook (or at the next check with the periodic check): the new commit arrives, the files are downloaded and verified, ETS2 is stopped, the old files go to the backup, the new ones are installed and ETS2 starts again.</li>
       </ol>
       <p>The <strong>Logs</strong> page of each PC shows everything that happens, with the <em>Warnings</em> and <em>Errors</em> filters and the <strong>Open log file</strong> button for the full history.</p>
       <Shot name="logs" alt="Logs page" />
@@ -444,6 +474,10 @@ server_packages.dat binary`}</code></pre>
       <tbody><tr>
       <td><code>GitHub API 404 on commits/master</code></td>
       <td>The branch in the settings is wrong (it often has to be <code>main</code>), or the repository is private and the token is missing / expired / does not include that repository. Also check the Repository URL</td>
+      </tr>
+      <tr>
+      <td><code>GitHub API 403 ... rate limit exceeded</code></td>
+      <td>With the periodic check and no token, the 60 requests per hour of GitHub are exceeded: raise <strong>Check GitHub every</strong> or set the <strong>GitHub token</strong> (section 8). The check resumes by itself when the limit resets</td>
       </tr>
       <tr>
       <td><code>ETS2 exited right after start</code></td>

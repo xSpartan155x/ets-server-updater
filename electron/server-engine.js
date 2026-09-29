@@ -1,5 +1,5 @@
-// Server mode: receive GitHub push webhooks and install the new packages on the dedicated server of the game
-// (download -> verify -> stop -> backup -> replace -> start, with rollback).
+// Server mode: find new commits (GitHub push webhook, or polling of the branch) and install the new packages on
+// the dedicated server of the game (download -> verify -> stop -> backup -> replace -> start, with rollback).
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
@@ -16,6 +16,7 @@ const WEBHOOK_PATH = '/github-webhook';
 const MAX_PAYLOAD = 25 * 1024 * 1024;
 const ZERO_SHA = '0'.repeat(40);
 const FIRST_STEAM_CHECK_MS = 60_000; // first check for a new server build, after the start of the app
+const FIRST_POLL_MS = 10_000; // first check of the branch (polling), after the start of the app
 
 class UpdateError extends LocalizedError {
   get name() { return 'UpdateError'; }
@@ -66,6 +67,7 @@ class ServerEngine extends Engine {
     this.workdir = settings.working_directory || (this.exe && path.dirname(this.exe));
     this.installDir = serverFolder(settings, this.exe);
     this.backupRoot = settings.backup_dir || path.join(path.dirname(settings.sii_path || '.'), 'backups');
+    this.polling = settings.sync_method !== 'webhook';
     this.secret = settings.webhook_secret || '';
     this.consoleFile = settings.server_log_path || path.join(path.dirname(settings.sii_path || '.'), 'server.log.txt');
     this.configFile = settings.server_config_path || path.join(path.dirname(settings.sii_path || '.'), 'server_config.sii');
@@ -79,6 +81,8 @@ class ServerEngine extends Engine {
     this.serverRunning = false;
     this.server = null;
     this.monitorTimer = null;
+    this.pollTimers = [];
+    this.lastPoll = ''; // time of the last check of the branch that reached GitHub
     this.steamTimers = [];
     // latest build on Steam (saved in the state file); phase: step of SteamCMD while it updates the server
     this.steam = { latest: this.history.steam_latest || '', checkedAt: this.history.steam_checked || '', phase: null };
@@ -88,16 +92,32 @@ class ServerEngine extends Engine {
 
   async start() {
     ({ owner: this.owner, repo: this.repo } = parseRepository(this.s.repository));
-    if (!this.secret) throw new LocalizedError('err.secretNotSet');
+    if (!this.polling && !this.secret) throw new LocalizedError('err.secretNotSet');
     for (const [key, message] of [['sii_path', 'err.siiNotSet'], ['dat_path', 'err.datNotSet'], ['executable', 'err.exeNotSet']]) {
       if (!this.s[key]) throw new LocalizedError(message);
     }
-    await this.startWebhook();
+    if (this.polling) this.schedulePolling();
+    else await this.startWebhook();
     this.console.start();
     this.setStatus('status.idle', 'ok');
     this.refreshServerState(true);
     this.monitorTimer = setInterval(() => this.refreshServerState(), 15_000);
     this.scheduleSteamChecks();
+  }
+
+  /** Polling: check the branch for a new commit every poll_minutes. */
+  schedulePolling() {
+    const minutes = Math.max(1, Number(this.s.poll_minutes) || 1);
+    this.pollTimers = [
+      setTimeout(() => this.queuePoll(), FIRST_POLL_MS),
+      setInterval(() => this.queuePoll(), minutes * 60_000),
+    ];
+    this.log.info(`Server mode, checking ${this.branch} on GitHub every ${minutes} min`);
+  }
+
+  queuePoll() {
+    if (this.jobs.some((job) => job.kind === 'poll')) return;
+    this.enqueue({ kind: 'poll' });
   }
 
   /** Periodic check of Steam for a new build of the dedicated server (server_update_hours, 0 = off). */
@@ -129,7 +149,7 @@ class ServerEngine extends Engine {
     this.stopped = true;
     this.jobs = [];
     clearInterval(this.monitorTimer);
-    for (const timer of this.steamTimers) clearTimeout(timer); // clearTimeout also clears intervals
+    for (const timer of [...this.pollTimers, ...this.steamTimers]) clearTimeout(timer); // clearTimeout also clears intervals
     this.console.stop();
     if (this.server) {
       this.server.close();
@@ -143,7 +163,9 @@ class ServerEngine extends Engine {
       t('tray.status', { status: this.status }),
       t(this.serverRunning ? 'tray.gameRunning' : 'tray.gameStopped', { game: this.game.name }),
       t('tray.lastUpdate', { value: this.lastUpdateText() }),
-      t('tray.webhook', { port: this.s.webhook_port, path: WEBHOOK_PATH }),
+      this.polling
+        ? t('tray.polling', { minutes: Number(this.s.poll_minutes), value: this.lastPoll || t('tray.never') })
+        : t('tray.webhook', { port: this.s.webhook_port, path: WEBHOOK_PATH }),
       this.steamLine(),
     ];
   }
@@ -186,6 +208,9 @@ class ServerEngine extends Engine {
         serverRunning: this.serverRunning,
         lastCommit: this.history.last_commit || '',
         lastUpdate: this.history.last_update || '',
+        syncMethod: this.polling ? 'polling' : 'webhook',
+        pollMinutes: Number(this.s.poll_minutes),
+        lastPoll: this.lastPoll,
         port: this.s.webhook_port,
         webhookPath: WEBHOOK_PATH,
         queued: this.jobs.length,
@@ -322,6 +347,48 @@ class ServerEngine extends Engine {
         resolve();
       });
     });
+  }
+
+  // ------------------------------------------------------------------ polling
+
+  /**
+   * Scheduled check of the branch: installs the latest commit when it was never processed. Runs quietly: the
+   * status changes only when there is something new, or when GitHub cannot be reached (retried at the next check).
+   */
+  async poll() {
+    let sha;
+    try {
+      sha = await this.latestCommit();
+    } catch (err) {
+      this.log.warn(`Check of ${this.branch} on GitHub failed: ${errorText(err)}`);
+      this.pollFailed = true;
+      this.setError(err);
+      return;
+    }
+    this.lastPoll = new Date().toLocaleString();
+    const recovered = this.pollFailed;
+    this.pollFailed = false;
+    if ((this.history.processed || []).includes(sha)) {
+      if (recovered) this.setStatus('status.idle', 'ok');
+      else this.emit('change');
+      return;
+    }
+    this.log.info(`New commit ${sha.slice(0, 7)} on ${this.branch}`);
+    try {
+      await this.applyUpdate(sha);
+    } catch (err) {
+      // a download that keeps failing (e.g. a file missing in that commit) is retried at every check:
+      // notify it once, not every few minutes
+      if (this.failedPollSha === sha) {
+        this.log.warn(`Commit ${sha.slice(0, 7)} still not installed: ${errorText(err)}`);
+        this.setError(err);
+        return;
+      }
+      this.failedPollSha = sha;
+      throw err;
+    }
+    this.failedPollSha = null;
+    this.setStatus('status.idle', 'ok');
   }
 
   // ------------------------------------------------------------------ GitHub
@@ -670,6 +737,9 @@ class ServerEngine extends Engine {
         } else if (job.kind === 'stop') {
           this.setStatus('status.stoppingGame', 'busy');
           await this.stopServer();
+        } else if (job.kind === 'poll') {
+          await this.poll(); // sets the status by itself
+          continue;
         } else {
           let sha = job.sha;
           if (job.kind === 'manual') {

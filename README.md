@@ -6,16 +6,17 @@ Un'unica applicazione Windows (Electron + React + Tailwind) che vive nel tray. N
 
 ```text
 [PC Client]                           [GitHub]                         [PC Server]
-ETS2 Package Sync     --git push-->   repository  --webhook push-->   ETS2 Package Sync
+ETS2 Package Sync     --git push-->   repository  <--polling o-->    ETS2 Package Sync
+                                                   webhook push
 modalità Client                                                       modalità Server
 Documenti\<gioco> -> clone                                            download -> stop -> backup
 temporaneo -> push                                                    -> sostituzione -> start
 ```
 
 - **Client**: controlla la cartella documenti del gioco (`Documenti\Euro Truck Simulator 2` o `Documenti\American Truck Simulator`). Quando il gioco esporta `server_packages.sii` / `.dat` (comando `export_server_packages` nella console), clona la repository in una cartella temporanea, li copia se sono cambiati, fa commit e push e poi elimina il clone.
-- **Server**: riceve il webhook di GitHub, scarica i file del commit, li verifica e li installa riavviando il server dedicato. Non fa polling. Tiene anche aggiornato il server dedicato con **SteamCMD** (integrato, scaricato in automatico) quando esce una nuova build del gioco.
+- **Server**: scopre i nuovi commit con un **controllo periodico** di GitHub (predefinito, nessuna porta da aprire) oppure con il **webhook** di GitHub (immediato, serve una porta aperta), scarica i file del commit, li verifica e li installa riavviando il server dedicato. Tiene anche aggiornato il server dedicato con **SteamCMD** (integrato, scaricato in automatico) quando esce una nuova build del gioco.
 
-ETS2 e ATS possono funzionare **insieme sullo stesso PC**: ogni gioco ha modalità, repository, webhook (porta propria) e stato separati. Si può anche usare un solo gioco e lasciare l'altro senza modalità.
+ETS2 e ATS possono funzionare **insieme sullo stesso PC**: ogni gioco ha modalità, repository, metodo di aggiornamento (con il webhook, porta propria) e stato separati. Si può anche usare un solo gioco e lasciare l'altro senza modalità.
 
 Nessun file di configurazione da modificare a mano: tutto si imposta dalla finestra dell'app, in italiano o in inglese.
 
@@ -47,7 +48,7 @@ Chiudendo la finestra l'app resta nel tray. Clic sull'icona → dashboard. Tasto
 
 | Client | Server |
 |---|---|
-| Stato, ultimo push | Stato, server in esecuzione/fermo, ultimo aggiornamento, porta webhook |
+| Stato, ultimo push | Stato, server in esecuzione/fermo, ultimo aggiornamento, intervallo e ultimo controllo di GitHub o porta webhook |
 | **Push ora**, **Apri repository** | **Aggiorna ora**, **Avvia / Ferma / Riavvia** il server |
 | Apri Dashboard, Impostazioni, Log, Esci | Apri Dashboard, Impostazioni, Log, Esci |
 
@@ -134,10 +135,12 @@ Impostazioni (per gioco):
 |---|---|
 | Eseguibile del server | Di solito `...\bin\win_x64\eurotrucks2_server.exe` (ETS2) o `...\bin\win_x64\amtrucks_server.exe` (ATS) |
 | server_packages.sii / .dat usati dal server | I file letti dal server dedicato |
-| Porta | Porta del webhook: default 8787 per ETS2, 8788 per ATS. Due server non possono usare la stessa porta |
-| Webhook secret | Obbligatorio. **Genera** ne crea uno casuale |
+| Nuovi pacchetti da GitHub | **Controllo periodico** (predefinito) o **Webhook**. Le configurazioni create prima della 4.1 restano sul webhook |
+| Controlla GitHub ogni (minuti) | Solo controllo periodico: default 5, minimo 1. Senza token GitHub accetta 60 richieste all'ora per IP |
+| Porta | Solo webhook: default 8787 per ETS2, 8788 per ATS. Due server con il webhook non possono usare la stessa porta |
+| Webhook secret | Solo webhook, obbligatorio. **Genera** ne crea uno casuale |
 | Token GitHub | Solo per repository **private**: fine-grained token con permesso *Contents: Read-only* su quella repository |
-| *Opzioni avanzate*: cartella di lavoro, argomenti, cartella dei backup, backup da conservare, timeout di arresto, controllo all'avvio, file di log del server, indirizzo di ascolto | |
+| *Opzioni avanzate*: cartella di lavoro, argomenti, cartella dei backup, backup da conservare, timeout di arresto, controllo all'avvio, file di log del server, indirizzo di ascolto (solo webhook) | |
 
 **Controllo all'avvio**: il server deve restare attivo per quei secondi dopo l'avvio, altrimenti l'aggiornamento viene annullato (0 = disattivato).
 
@@ -175,7 +178,11 @@ In **Server → Configurazione** si modifica il `server_config.sii` del server d
 - I valori vengono controllati prima di salvare (lunghezza dei testi, 1-8 giocatori, porte 0-65535, token alfanumerico, Steam ID numerici).
 - Il server legge il file all'avvio: **Salva e riavvia il server** applica subito le modifiche.
 
-### Rete
+### Controllo periodico
+
+Ogni *N* minuti (e 10 secondi dopo l'avvio) l'app chiede a GitHub l'ultimo commit del branch con una sola richiesta. Se non è ancora stato processato lo installa con gli stessi passi del webhook (sotto, dal punto 5). Se GitHub non è raggiungibile lo stato passa in errore senza notifiche e il controllo successivo riprova; un commit che non si riesce a installare viene notificato una volta sola.
+
+### Rete (solo webhook)
 
 GitHub deve raggiungere il PC da internet sulla porta del webhook di ogni server:
 
@@ -190,7 +197,7 @@ GitHub deve raggiungere il PC da internet sulla porta del webhook di ogni server
 
 Verifica: `http://IP_PUBBLICO:8787/health` (ATS: `:8788/health`) deve rispondere `OK`.
 
-### Cosa succede a ogni push
+### Cosa succede a ogni push (webhook)
 
 1. Verifica della firma `X-Hub-Signature-256` con il secret del gioco (401 se non valida).
 2. Si considerano solo gli eventi `push` sul branch configurato.

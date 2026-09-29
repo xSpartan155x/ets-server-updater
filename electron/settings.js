@@ -12,6 +12,7 @@ const { t, LocalizedError, errorText } = require('./i18n');
 
 const SECRET_KEYS = ['webhook_secret', 'github_token'];
 const MODES = ['client', 'server'];
+const SYNC_METHODS = ['polling', 'webhook'];
 
 const GAME_DEFAULTS = {
   mode: '', // '' (not used) | 'client' | 'server'
@@ -25,6 +26,8 @@ const GAME_DEFAULTS = {
   commit_message: '',
   debounce_seconds: 5,
   // server
+  sync_method: 'polling', // how new commits are found: 'polling' (asks GitHub every poll_minutes) | 'webhook'
+  poll_minutes: 5,
   webhook_host: '0.0.0.0',
   webhook_port: 0,
   webhook_secret: '',
@@ -77,6 +80,9 @@ function fromLegacy(data) {
   return game;
 }
 
+/** Versions before 4.1 had the webhook only: a server configured with them keeps using it. */
+const usedWebhook = (game) => game.mode === 'server' || Boolean(game.webhook_secret);
+
 /** Complete settings from stored or imported data: unknown keys dropped, missing ones defaulted. */
 function normalize(stored = {}) {
   const games = {};
@@ -84,6 +90,8 @@ function normalize(stored = {}) {
     const source = isLegacy(stored) ? (id === 'ets2' ? fromLegacy(stored) : {}) : (stored.games?.[id] || {});
     games[id] = gameDefaults(id);
     for (const key of Object.keys(GAME_DEFAULTS)) if (key in source) games[id][key] = source[key];
+    if (!('sync_method' in source) && usedWebhook(source)) games[id].sync_method = 'webhook';
+    if (!SYNC_METHODS.includes(games[id].sync_method)) games[id].sync_method = GAME_DEFAULTS.sync_method;
   }
   return { theme: stored.theme || DEFAULTS.theme, language: stored.language || DEFAULTS.language, games };
 }
@@ -142,7 +150,7 @@ function validateGame(s) {
   const required = {
     client: { documents_path: 'field.documents' },
     server: {
-      webhook_secret: 'field.webhookSecret',
+      ...(s.sync_method === 'webhook' && { webhook_secret: 'field.webhookSecret' }),
       sii_path: 'field.siiPath',
       dat_path: 'field.datPath',
       executable: 'field.serverExe',
@@ -150,6 +158,9 @@ function validateGame(s) {
   }[s.mode] || {};
   for (const [key, label] of Object.entries(required)) {
     if (!String(s[key] || '').trim()) errors.push(t('err.required', { label: t(label) }));
+  }
+  if (s.mode === 'server' && s.sync_method === 'polling' && Number.isInteger(s.poll_minutes) && s.poll_minutes < 1) {
+    errors.push(t('err.pollMinutes'));
   }
   return errors;
 }
@@ -167,7 +178,8 @@ function validateSettings(settings) {
     }
     errors.push(...own.map((e) => `${GAMES[id].name}: ${e}`));
   }
-  const ports = active.filter((id) => settings.games[id].mode === 'server').map((id) => settings.games[id].webhook_port);
+  const ports = active.filter((id) => settings.games[id].mode === 'server' && settings.games[id].sync_method === 'webhook')
+    .map((id) => settings.games[id].webhook_port);
   if (new Set(ports).size < ports.length) errors.push(t('err.samePort', { port: ports[0] }));
   // two games writing the same files of the same branch would overwrite each other
   const targets = active.map((id) => {
@@ -228,10 +240,12 @@ function parseImport(text) {
       const type = typeof GAME_DEFAULTS[key];
       const valid = type === 'number' ? Number.isInteger(value) && value >= 0
         : type === 'boolean' ? typeof value === 'boolean'
-          : typeof value === 'string' && value.length <= 4096 && (key !== 'mode' || ['', ...MODES].includes(value));
+          : typeof value === 'string' && value.length <= 4096 && (key !== 'mode' || ['', ...MODES].includes(value)) &&
+            (key !== 'sync_method' || SYNC_METHODS.includes(value));
       if (valid) games[id][key] = value;
       else skipped.push(`${GAMES[id].name} ${key}`);
     }
+    if (!('sync_method' in source) && usedWebhook(source)) games[id].sync_method = 'webhook';
   }
   const includesSecrets = Object.values(games).some((game) => SECRET_KEYS.some((k) => k in game));
   return { settings: { games }, skipped, version: String(data.version || ''), includesSecrets };

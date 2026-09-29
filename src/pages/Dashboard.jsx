@@ -112,7 +112,26 @@ function GitMissing({ onGitHelp }) {
   );
 }
 
-/** Server mode: the package sync (commit, webhook); the dedicated server itself is in the Server page. */
+/** How the server finds new commits: polling of the branch, or the GitHub webhook with its Payload URL. */
+function SyncCard({ game, d, localIps }) {
+  const t = useT();
+  if (d.syncMethod === 'polling') {
+    return (
+      <Card title={t('dash.pollingTitle', { game: game.name })} icon={RefreshCw}>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          {t('dash.pollingText', { minutes: d.pollMinutes, value: d.lastPoll || t('dash.never') })}
+        </p>
+      </Card>
+    );
+  }
+  return (
+    <Card title={t('dash.webhookTitle', { game: game.name })} icon={Webhook} description={t('dash.webhookDescription')}>
+      <WebhookUrl port={d.port} localIps={localIps} />
+    </Card>
+  );
+}
+
+/** Server mode: the package sync (commit, polling or webhook); the dedicated server itself is in the Server page. */
 function ServerView({ game, g, localIps, onNavigate }) {
   const t = useT();
   const d = g.details;
@@ -135,9 +154,7 @@ function ServerView({ game, g, localIps, onNavigate }) {
         </Stat>
         <Stat icon={RefreshCw} label={t('dash.lastUpdate')}>{d.lastUpdate || t('dash.Never')}</Stat>
       </div>
-      <Card title={t('dash.webhookTitle', { game: game.name })} icon={Webhook} description={t('dash.webhookDescription')}>
-        <WebhookUrl port={d.port} localIps={localIps} />
-      </Card>
+      <SyncCard game={game} d={d} localIps={localIps} />
     </>
   );
 }
