@@ -39,7 +39,7 @@ const CLIENT_DEFAULTS = {
 const INSTANCE_DEFAULTS = {
   id: '',
   name: '',
-  homedir: '', // -homedir of the server: server_config.sii, server_packages.sii/.dat, server.log.txt
+  homedir: '', // -homedir of the server (its files sit one level under it, in its own "<documentsFolder>" folder)
   repository: '',
   branch: 'master',
   repo_sii_file: 'server_packages.sii',

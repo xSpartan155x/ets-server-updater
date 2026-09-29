@@ -139,7 +139,7 @@ export default {
   'new.nameHint': "Mostrato nell'app e usato come nome della sessione (puoi cambiarlo dopo nella scheda Sessione).",
   'new.namePlaceholder': 'es. EU Convoy',
   'new.homedir': 'Cartella home',
-  'new.homedirHint': 'La -homedir del server: qui ci sono server_config.sii, server_packages.sii/.dat e server.log.txt.',
+  'new.homedirHint': 'La -homedir del server. Il server tiene server_config.sii, server_packages.sii/.dat e server.log.txt un livello più sotto, nella sua cartella di gioco.',
   'new.repository': 'Repository',
   'new.repositoryText': 'Una repository per ogni server: il Client invia lì i pacchetti di questo server.',
   'new.session': 'Sessione',

@@ -11,6 +11,7 @@ const { sleep } = require('./engine');
 const { LogTail } = require('./log-tail');
 const { UpdateError } = require('./github');
 const { t, errorText } = require('./i18n');
+const { gameHomeOf, launchHomedirOf } = require('./games');
 
 const sha256 = (data) => crypto.createHash('sha256').update(data).digest('hex');
 const fileSha256 = (file) => (fs.existsSync(file) ? sha256(fs.readFileSync(file)) : null);
@@ -53,12 +54,15 @@ class ServerInstance extends EventEmitter {
     this.name = s.name;
     this.stateFile = stateFile;
     this.homedir = s.homedir ? path.resolve(s.homedir) : '';
-    const inHome = (file, custom) => (custom ? path.resolve(custom) : path.join(this.homedir, file));
+    // the server always keeps its files in a "<documentsFolder>" subfolder of -homedir, never in -homedir itself
+    this.gameHome = gameHomeOf(this.game.documentsFolder, this.homedir);
+    const inHome = (file, custom) => (custom ? path.resolve(custom) : path.join(this.gameHome, file));
     this.siiPath = inHome('server_packages.sii', s.sii_path);
     this.datPath = inHome('server_packages.dat', s.dat_path);
     this.configFile = inHome('server_config.sii', s.config_path);
     this.consoleFile = inHome('server.log.txt', s.log_path);
-    this.backupRoot = s.backup_dir ? path.resolve(s.backup_dir) : path.join(this.homedir, 'backups');
+    this.backupRoot = s.backup_dir ? path.resolve(s.backup_dir) : path.join(this.gameHome, 'backups');
+    this.migrateFlatHome(s);
     this.targets = new Map([[s.repo_sii_file, this.siiPath], [s.repo_dat_file, this.datPath]]);
     this.console = new LogTail(this.consoleFile);
     this.console.on('lines', (update) => this.emit('console', update));
@@ -68,6 +72,35 @@ class ServerInstance extends EventEmitter {
     this.error = null; // last error of a job of this server (cleared by the next success)
     this.failedPollSha = null;
     this.lastPoll = '';
+  }
+
+  /**
+   * A server created while the app still placed files directly in -homedir (instead of its real
+   * "<homedir>/<documentsFolder>") has them one level too high: move the default ones (not a custom path) down
+   * into gameHome, once, so it can actually start. No-op once gameHome already has its config, or homedir equals
+   * gameHome (the legacy "Documents\<documentsFolder>" layout, already in the right place).
+   */
+  migrateFlatHome(s) {
+    if (!this.homedir || this.gameHome === this.homedir) return;
+    const staleConfig = path.join(this.homedir, 'server_config.sii');
+    if (!fs.existsSync(staleConfig) || fs.existsSync(this.configFile)) return;
+    try {
+      fs.mkdirSync(this.gameHome, { recursive: true });
+      const moves = [
+        [s.config_path, staleConfig, this.configFile],
+        [s.sii_path, path.join(this.homedir, 'server_packages.sii'), this.siiPath],
+        [s.dat_path, path.join(this.homedir, 'server_packages.dat'), this.datPath],
+        [s.log_path, path.join(this.homedir, 'server.log.txt'), this.consoleFile],
+      ];
+      for (const [custom, from, to] of moves) {
+        if (!custom && fs.existsSync(from) && !fs.existsSync(to)) fs.renameSync(from, to);
+      }
+      const backupsFrom = path.join(this.homedir, 'backups');
+      if (!s.backup_dir && fs.existsSync(backupsFrom) && !fs.existsSync(this.backupRoot)) fs.renameSync(backupsFrom, this.backupRoot);
+      this.log.info(`Files moved to ${this.gameHome} (the server keeps them one level under -homedir)`);
+    } catch (err) {
+      this.log.error(`Cannot move the files to ${this.gameHome}`, err);
+    }
   }
 
   get running() {
@@ -106,6 +139,7 @@ class ServerInstance extends EventEmitter {
       id: this.id,
       name: this.name,
       homedir: this.homedir,
+      gameHome: this.gameHome,
       repository: this.s.repository,
       branch: this.s.branch,
       running: this.running,
@@ -155,11 +189,17 @@ class ServerInstance extends EventEmitter {
 
   // ------------------------------------------------------------------ process
 
-  /** Arguments of the server: -nosingle -homedir "<home>" and the extra ones (unless they set them already). */
+  /**
+   * Arguments of the server: -nosingle -homedir "<home>" and the extra ones (unless they set them already). The
+   * server always nests its own "<documentsFolder>" under -homedir, so this is homedir itself, or its parent
+   * when homedir already IS that subfolder (see gameHomeOf in games.js): either way the server ends up using
+   * gameHome as its real home.
+   */
   launchArgs() {
     const extra = splitArgs(this.s.arguments);
     const has = (flag) => extra.some((arg) => arg.toLowerCase() === flag);
-    return [...(has('-nosingle') ? [] : ['-nosingle']), ...(has('-homedir') ? [] : ['-homedir', this.homedir]), ...extra];
+    const homedir = launchHomedirOf(this.game.documentsFolder, this.homedir);
+    return [...(has('-nosingle') ? [] : ['-nosingle']), ...(has('-homedir') ? [] : ['-homedir', homedir]), ...extra];
   }
 
   async stopServer() {
@@ -194,7 +234,7 @@ class ServerInstance extends EventEmitter {
     const exe = this.host.exe;
     if (!fs.existsSync(exe)) throw new UpdateError('err.exeNotFound', { game: this.game.name, path: exe });
     if (!fs.existsSync(this.siiPath) || !fs.existsSync(this.datPath)) throw new UpdateError('err.noPackages', { name: this.name });
-    fs.mkdirSync(this.homedir, { recursive: true });
+    fs.mkdirSync(this.gameHome, { recursive: true });
     const child = spawn(exe, this.launchArgs(), {
       cwd: path.dirname(exe),
       detached: true, // own console window, keeps running if this app exits
@@ -284,7 +324,7 @@ class ServerInstance extends EventEmitter {
     const files = new Map();
     for (const [repoFile, data] of downloaded) {
       const dest = this.targets.get(repoFile);
-      const pointsHome = path.dirname(this.datPath).toLowerCase() === this.homedir.toLowerCase();
+      const pointsHome = path.dirname(this.datPath).toLowerCase() === this.gameHome.toLowerCase();
       files.set(dest, dest === this.siiPath && pointsHome ? pointToDat(data, path.basename(this.datPath)) : data);
     }
     return files;
