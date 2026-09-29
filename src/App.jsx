@@ -38,7 +38,7 @@ const THEMES = [
   { id: 'dark', icon: Moon },
 ];
 
-const NAV_ITEM = 'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors';
+const NAV_ITEM = 'flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors';
 const NAV_ACTIVE = 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400';
 const NAV_IDLE = 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100';
 
@@ -55,7 +55,7 @@ function ThemeSwitcher({ value, onChange }) {
           type="button"
           title={t(`theme.${id}`)}
           onClick={() => onChange(id)}
-          className={`flex items-center justify-center rounded-md py-1.5 transition-colors ${
+          className={`flex cursor-pointer items-center justify-center rounded-md py-1.5 transition-colors ${
             value === id
               ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-950 dark:text-slate-100'
               : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'

@@ -98,7 +98,7 @@ function Moderators({ ids, onChange, error }) {
               <Avatar src={profiles[id]?.found ? profiles[id].avatar : null} />
               <div className="flex min-w-0 flex-1 flex-col text-sm">
                 {line(id)}
-                <span className="selectable font-mono text-[11px] text-slate-500 dark:text-slate-400">{id}</span>
+                <span className="select-text font-mono text-[11px] text-slate-500 dark:text-slate-400">{id}</span>
               </div>
               {STEAM_ID.test(id) && (
                 <Button
@@ -205,7 +205,7 @@ export default function ServerConfig({ id, g }) {
             <p className="mt-2 max-w-lg text-sm text-slate-500 dark:text-slate-400">
               <Trans
                 k="cfg.missingText"
-                params={{ file: <code className="selectable break-all">{file?.file || g.details.configFile}</code>, game: game.name }}
+                params={{ file: <code className="select-text break-all">{file?.file || g.details.configFile}</code>, game: game.name }}
                 tags={{ code: (content) => <code className="rounded bg-slate-100 px-1 font-mono dark:bg-slate-800">{content}</code> }}
               />
             </p>
@@ -285,7 +285,7 @@ export default function ServerConfig({ id, g }) {
       {/* stays at the bottom of the window while the form scrolls, like the footer of Settings */}
       <footer className="sticky bottom-0 -mx-8 border-t border-slate-200 bg-white/90 px-8 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div className="flex items-center gap-3">
-          <span className="selectable min-w-0 flex-1 truncate font-mono text-xs text-slate-500 dark:text-slate-400" title={file.file}>{file.file}</span>
+          <span className="select-text min-w-0 flex-1 truncate font-mono text-xs text-slate-500 dark:text-slate-400" title={file.file}>{file.file}</span>
           <Button variant="ghost" icon={FileText} onClick={() => window.api.serverConfig.open(id)} className="py-1 text-xs">{t('console.openFile')}</Button>
           <Button variant="ghost" icon={RotateCw} onClick={load} disabled={saving} className="py-1 text-xs">{t('cfg.reload')}</Button>
         </div>

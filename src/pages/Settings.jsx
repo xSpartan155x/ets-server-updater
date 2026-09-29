@@ -54,7 +54,7 @@ function Segmented({ options, value, onChange }) {
           key={option.id}
           type="button"
           onClick={() => onChange(option.id)}
-          className={`rounded-md px-3 py-1 text-xs font-medium whitespace-nowrap ${
+          className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium whitespace-nowrap ${
             value === option.id
               ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
               : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
@@ -74,7 +74,7 @@ function OptionCard({ icon: Icon, title, text, active, onClick, tooltip }) {
       type="button"
       title={tooltip}
       onClick={onClick}
-      className={`flex gap-3 rounded-xl border p-4 text-left transition-all ${
+      className={`flex cursor-pointer gap-3 rounded-xl border p-4 text-left transition-all ${
         active
           ? 'border-orange-500 bg-orange-50/60 ring-2 ring-orange-500/20 dark:bg-orange-500/10'
           : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800/50'
@@ -361,8 +361,8 @@ export default function Settings({ data, onSaved, game, language, onLanguage, on
             : 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200'}`}
           >
             {notice.kind === 'error' ? <AlertCircle className="mt-0.5 size-4 shrink-0" /> : <Info className="mt-0.5 size-4 shrink-0" />}
-            <p className="selectable flex-1">{notice.text}</p>
-            <button type="button" onClick={() => setNotice(null)} className="opacity-60 hover:opacity-100" title={t('ui.close')}><X className="size-4" /></button>
+            <p className="select-text flex-1">{notice.text}</p>
+            <button type="button" onClick={() => setNotice(null)} className="cursor-pointer opacity-60 hover:opacity-100" title={t('ui.close')}><X className="size-4" /></button>
           </div>
         </div>
       )}

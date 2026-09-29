@@ -85,7 +85,7 @@ export function Button({ variant = 'secondary', icon: Icon, loading, children, c
   return (
     <button
       type="button"
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:cursor-not-allowed ${BUTTON_VARIANTS[variant]} ${className}`}
+      className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500 disabled:cursor-not-allowed ${BUTTON_VARIANTS[variant]} ${className}`}
       disabled={loading || props.disabled}
       {...props}
     >
@@ -108,7 +108,7 @@ export function Field({ label, hint, error, children }) {
   );
 }
 
-const INPUT = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-600 dark:shadow-none';
+const INPUT = 'w-full select-text rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-600 dark:shadow-none';
 
 export function TextInput({ value, onChange, className = '', ...props }) {
   return <input className={`${INPUT} ${className}`} value={value ?? ''} onChange={(e) => onChange(e.target.value)} {...props} />;
@@ -159,7 +159,7 @@ export function SecretInput({ value, onChange, placeholder, extra }) {
         <button
           type="button"
           onClick={() => setShown(!shown)}
-          className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+          className="absolute inset-y-0 right-0 flex cursor-pointer items-center px-3 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
           title={shown ? t('ui.hide') : t('ui.show')}
         >
           {shown ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -180,7 +180,7 @@ export function CopyField({ value }) {
   };
   return (
     <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 py-1 pr-1 pl-3 dark:border-slate-800 dark:bg-slate-950">
-      <code className="selectable flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300">{value}</code>
+      <code className="select-text flex-1 truncate font-mono text-xs text-slate-700 dark:text-slate-300">{value}</code>
       <Button variant="ghost" icon={copied ? Check : Copy} onClick={copy} className="px-2 py-1">
         {copied ? t('ui.copied') : t('ui.copy')}
       </Button>
@@ -201,7 +201,7 @@ export function Toggle({ checked, onChange, label, description, disabled }) {
         aria-checked={checked}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? 'bg-orange-600 dark:bg-orange-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors disabled:cursor-not-allowed ${checked ? 'bg-orange-600 dark:bg-orange-500' : 'bg-slate-300 dark:bg-slate-700'}`}
       >
         <span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5.5' : 'translate-x-0.5'}`} />
       </button>
@@ -242,7 +242,7 @@ export function WebhookUrl({ port, localIps = [] }) {
           params={{
             port: port || 8787,
             lan: localIps.length > 0 && (
-              <Trans k="webhook.lan" params={{ ips: <span className="selectable font-mono">{localIps.join(', ')}</span> }} />
+              <Trans k="webhook.lan" params={{ ips: <span className="select-text font-mono">{localIps.join(', ')}</span> }} />
             ),
           }}
         />

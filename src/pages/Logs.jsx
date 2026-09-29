@@ -17,7 +17,7 @@ const FILTERS = {
 
 export function LogLine({ line, compact }) {
   return (
-    <div className={`selectable flex gap-3 font-mono text-xs leading-5 ${compact ? '' : 'px-4 py-0.5 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
+    <div className={`select-text flex gap-3 font-mono text-xs leading-5 ${compact ? '' : 'px-4 py-0.5 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
       <span className="shrink-0 text-slate-400 dark:text-slate-500">{compact ? line.time.slice(11) : line.time}</span>
       <span className={`w-10 shrink-0 font-semibold ${LEVEL_STYLES[line.level]}`}>{line.level}</span>
       <span className={`min-w-0 ${compact ? 'truncate' : 'whitespace-pre-wrap wrap-break-word'} ${line.level === 'ERROR' ? 'text-red-700 dark:text-red-300' : 'text-slate-700 dark:text-slate-300'}`}>
@@ -51,7 +51,7 @@ export default function Logs({ logs }) {
                 key={id}
                 type="button"
                 onClick={() => setFilter(id)}
-                className={`rounded-md px-3 py-1 text-xs font-medium ${
+                className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium ${
                   filter === id
                     ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                     : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
@@ -61,8 +61,8 @@ export default function Logs({ logs }) {
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-            <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} className="accent-orange-600" />
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+            <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} className="cursor-pointer accent-orange-600" />
             {t('logs.follow')}
           </label>
         </div>

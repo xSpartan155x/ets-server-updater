@@ -1,61 +1,51 @@
 @import "tailwindcss";
 
+/* Styles live in the class names of the components (and of index.html); this file holds only the theme and
+   what classes cannot express. The theme (light / dark / system) is applied by Electron's nativeTheme, which
+   drives prefers-color-scheme: Tailwind's `dark:` variant and the scrollbars below follow it. */
+
 @theme {
   --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --font-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  /* Indeterminate progress bar (SteamCMD reports no percentage while it runs): class animate-slide */
+  --animate-slide: slide 1.4s ease-in-out infinite;
+  @keyframes slide {
+    from { left: -33%; }
+    to { left: 100%; }
+  }
 }
 
-/* Indeterminate progress bar (SteamCMD reports no percentage while it runs) */
-@keyframes slide {
-  from { left: -33%; }
-  to { left: 100%; }
-}
+/* Scrollbars in the colours of the app: a rounded slate thumb on a transparent track, orange while dragged.
+   In the base layer, so a class on a container can change them (the always-dark server console). */
+@layer base {
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background-clip: padding-box;
+    background-color: var(--color-slate-300);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-slate-400);
+  }
+  ::-webkit-scrollbar-thumb:active {
+    background-color: var(--color-orange-500);
+  }
 
-/* The theme (light / dark / system) is chosen in the app and applied by Electron's nativeTheme,
-   which drives prefers-color-scheme: Tailwind's default `dark:` variant follows it. */
-:root {
-  color-scheme: light dark; /* native scrollbars and form controls follow the theme */
+  @media (prefers-color-scheme: dark) {
+    ::-webkit-scrollbar-thumb {
+      background-color: var(--color-slate-700);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: var(--color-slate-600);
+    }
+  }
 }
-
-html, body, #root {
-  height: 100%;
-}
-
-/* Only the sidebar and the page area scroll, never the whole window */
-body {
-  overflow: hidden;
-}
-
-body {
-  @apply bg-slate-50 text-slate-800 antialiased select-none dark:bg-slate-950 dark:text-slate-200;
-}
-
-input, textarea, .selectable {
-  @apply select-text;
-}
-
-/* Guide page (src/pages/Guide.jsx) */
-.guide {
-  @apply text-sm leading-6 text-slate-700 dark:text-slate-300;
-}
-.guide h1 { @apply mb-3 text-2xl font-semibold text-slate-900 dark:text-slate-50; }
-.guide h2 { @apply mt-10 mb-3 scroll-mt-6 border-b border-slate-200 pb-2 text-lg font-semibold text-slate-900 dark:border-slate-800 dark:text-slate-100; }
-.guide h3 { @apply mt-6 mb-2 scroll-mt-6 text-base font-semibold text-slate-900 dark:text-slate-100; }
-.guide p, .guide ul, .guide ol, .guide table, .guide pre, .guide blockquote, .guide picture { @apply my-3; }
-.guide ul { @apply list-disc pl-6; }
-.guide ol { @apply list-decimal pl-6; }
-.guide li { @apply my-1; }
-.guide li > p { @apply my-1; }
-.guide a { @apply font-medium text-orange-700 underline decoration-orange-300 underline-offset-2 hover:text-orange-800 dark:text-orange-400 dark:decoration-orange-500/40 dark:hover:text-orange-300; }
-.guide strong { @apply font-semibold text-slate-900 dark:text-slate-100; }
-.guide code { @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.85em] text-slate-800 dark:bg-slate-800 dark:text-slate-200; }
-.guide pre { @apply overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 dark:border-slate-800 dark:bg-slate-950; }
-.guide pre code { @apply bg-transparent p-0 text-inherit; }
-.guide blockquote { @apply rounded-r-lg border-l-4 border-orange-400 bg-orange-50 px-4 py-2 text-slate-700 dark:border-orange-500/60 dark:bg-orange-500/10 dark:text-slate-300; }
-.guide blockquote p { @apply my-1; }
-.guide table { @apply w-full border-collapse text-left text-xs; }
-.guide th { @apply border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100; }
-.guide td { @apply border border-slate-200 px-3 py-2 align-top dark:border-slate-800; }
-.guide img { @apply my-2 h-auto max-w-full rounded-lg border border-slate-200 shadow-sm dark:border-slate-700; }
-.guide hr { @apply my-8 border-slate-200 dark:border-slate-800; }
-.guide > :first-child { @apply mt-0; }

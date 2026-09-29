@@ -30,7 +30,7 @@ function StatusHero({ snapshot }) {
       </div>
       <div className="min-w-0">
         <div className={`text-xs font-semibold tracking-wide uppercase ${style.text}`}>{label}</div>
-        <div className="selectable mt-0.5 text-base font-medium wrap-break-word text-slate-900 dark:text-slate-100">{snapshot.status}</div>
+        <div className="select-text mt-0.5 text-base font-medium wrap-break-word text-slate-900 dark:text-slate-100">{snapshot.status}</div>
       </div>
     </div>
   );
@@ -61,7 +61,7 @@ function FlowStep({ icon: Icon, title, detail, footer }) {
         <Icon className="size-4 text-orange-600 dark:text-orange-400" />
         {title}
       </div>
-      <div className="selectable mt-1.5 font-mono text-[11px] break-all text-slate-500 dark:text-slate-400">{detail}</div>
+      <div className="select-text mt-1.5 font-mono text-[11px] break-all text-slate-500 dark:text-slate-400">{detail}</div>
       {footer && <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">{footer}</div>}
     </div>
   );
@@ -138,7 +138,7 @@ function ServerView({ game, g, localIps, onNavigate }) {
   return (
     <>
       <div className="grid grid-cols-3 gap-4">
-        <button type="button" onClick={() => onNavigate('server')} className="group text-left" title={t('dash.openServer')}>
+        <button type="button" onClick={() => onNavigate('server')} className="group cursor-pointer text-left" title={t('dash.openServer')}>
           <Stat icon={Server} label={t('dash.gameServer', { game: game.name })}>
             <span className="flex items-center justify-between gap-2">
               <span className={`inline-flex items-center gap-2 ${d.serverRunning ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>

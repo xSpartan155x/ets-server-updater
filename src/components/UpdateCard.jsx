@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, ArrowDownToLine, CheckCircle2, ExternalLink, Loader2, RefreshCw, RotateCw, Sparkles, X } from 'lucide-react';
 import { useT } from '../i18n';
 
-const SMALL_BUTTON = 'inline-flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60';
+const SMALL_BUTTON = 'inline-flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60';
 const PRIMARY = `${SMALL_BUTTON} bg-orange-600 text-white hover:bg-orange-700 dark:bg-orange-500 dark:hover:bg-orange-600`;
 const SECONDARY = `${SMALL_BUTTON} border border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800`;
 
@@ -64,7 +64,7 @@ export function UpdateBanner() {
             type="button"
             title={t('update.bannerHide')}
             onClick={() => setHidden(`${u.status}:${u.latest}`)}
-            className="rounded p-1 text-orange-700 transition-colors hover:bg-orange-100 dark:text-orange-300 dark:hover:bg-orange-900"
+            className="cursor-pointer rounded p-1 text-orange-700 transition-colors hover:bg-orange-100 dark:text-orange-300 dark:hover:bg-orange-900"
           >
             <X className="size-4" />
           </button>
@@ -138,7 +138,7 @@ export default function UpdateCard() {
           title={t('update.check')}
           disabled={busy || u.status === 'downloaded'}
           onClick={() => window.api.update.check()}
-          className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          className="cursor-pointer rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-slate-800 dark:hover:text-slate-200"
         >
           <RefreshCw className={`size-3.5 ${u.status === 'checking' ? 'animate-spin' : ''}`} />
         </button>

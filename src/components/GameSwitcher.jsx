@@ -48,7 +48,7 @@ export default function GameSwitcher({ value, onChange, snapshot }) {
         aria-haspopup="listbox"
         aria-expanded={open}
         title={t('game.select')}
-        className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors ${
+        className={`flex w-full cursor-pointer items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors ${
           open ? 'bg-slate-100 dark:bg-slate-800' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
         }`}
       >
@@ -74,7 +74,7 @@ export default function GameSwitcher({ value, onChange, snapshot }) {
               role="option"
               aria-selected={id === value}
               onClick={() => { onChange(id); setOpen(false); }}
-              className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors ${
+              className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors ${
                 id === value ? 'bg-orange-50 dark:bg-orange-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >

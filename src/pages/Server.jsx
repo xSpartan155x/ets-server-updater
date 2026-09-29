@@ -60,22 +60,22 @@ function ConsoleView({ id, lines }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('console.filter')}
-            className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pr-3 pl-8 text-xs text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+            className="w-full select-text rounded-lg border border-slate-300 bg-white py-1.5 pr-3 pl-8 text-xs text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
           />
         </div>
-        <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-          <input type="checkbox" checked={hideWarnings} onChange={(e) => setHideWarnings(e.target.checked)} className="accent-orange-600" />
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+          <input type="checkbox" checked={hideWarnings} onChange={(e) => setHideWarnings(e.target.checked)} className="cursor-pointer accent-orange-600" />
           {t('console.hideWarnings')}
         </label>
-        <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-          <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} className="accent-orange-600" />
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+          <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} className="cursor-pointer accent-orange-600" />
           {t('console.follow')}
         </label>
         <Button variant="ghost" icon={FileText} onClick={() => window.api.openConsoleFile(id)} className="ml-auto py-1 text-xs">
           {t('console.openFile')}
         </Button>
       </div>
-      <div className="selectable min-h-0 flex-1 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 font-mono text-xs leading-5 shadow-sm">
+      <div className="select-text min-h-0 flex-1 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb:active]:bg-orange-500 [&::-webkit-scrollbar-thumb:hover]:bg-slate-600 px-4 py-3 font-mono text-xs leading-5 shadow-sm">
         {visible.length ? visible.map((line, i) => (
           <div key={i} className={`whitespace-pre-wrap wrap-break-word ${lineStyle(line)}`}>{line || ' '}</div>
         )) : (
@@ -180,7 +180,7 @@ function UpdatesView({ id, g, options, onSaved }) {
             <div className="mb-1.5 text-xs text-slate-500 dark:text-slate-400">{g.status}</div>
             {/* SteamCMD gives no percentage while it runs: an indeterminate bar */}
             <div className="relative h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-              <div className="absolute inset-y-0 w-1/3 animate-[slide_1.4s_ease-in-out_infinite] rounded-full bg-orange-500" />
+              <div className="absolute inset-y-0 w-1/3 animate-slide rounded-full bg-orange-500" />
             </div>
           </div>
         )}

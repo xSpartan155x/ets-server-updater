@@ -49,7 +49,7 @@ export default function GitDialog({ git, onChecked, onClose }) {
               </p>
             )}
           </div>
-          <button type="button" onClick={onClose} title={t('ui.close')} className="rounded p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+          <button type="button" onClick={onClose} title={t('ui.close')} className="cursor-pointer rounded p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
             <X className="size-4" />
           </button>
         </div>
