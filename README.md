@@ -42,7 +42,7 @@ Al primo avvio si apre la finestra su **Impostazioni**:
 2. Scegliere il gioco dal menu in alto a sinistra (clic sul nome del gioco: **Euro Truck Simulator 2** o **American Truck Simulator**) e la sua modalità: *Client* o *Server* (un secondo clic sulla modalità scelta la toglie e il gioco resta non configurato).
 3. Per usare anche l'altro gioco, sceglierlo dal menu e ripetere: le modifiche di entrambi restano nel modulo fino al salvataggio.
 4. **Salva impostazioni**: i giochi configurati partono subito e si apre la pagina **Server**.
-5. In **Server** configurare i server: con il Client *Server a cui inviare* (una repository GitHub per server); con il Server *Installazione e opzioni* e poi *Nuovo server*.
+5. In **Server** configurare i server: con il Client *Server a cui inviare* (una repository GitHub per server); con il Server *Nuovo server* (installazione e opzioni comuni sono in *Impostazioni → Installazione e opzioni server*).
 
 Chiudendo la finestra l'app resta nel tray. Clic sull'icona → dashboard. Tasto destro → menu (con due giochi, un sottomenu per ciascuno):
 
@@ -61,7 +61,7 @@ La finestra ha queste pagine:
 Dashboard, Server e Impostazioni mostrano il gioco scelto nel menu in alto a sinistra (l'ultimo scelto viene ricordato):
 
 - **Dashboard**: stato, dettagli e pulsanti delle azioni del gioco.
-- **Server**: tutto ciò che riguarda i server, per entrambe le modalità. Client: **Server a cui inviare**. Server: **Installazione e opzioni** (installazione e SteamCMD, controllo periodico o webhook, token, regole comuni), **Tutti i server** (un riquadro per server e, in fondo, l'installazione condivisa con SteamCMD), una voce per ogni server e **Nuovo server**. La pagina di un server ha Avvia / Ferma / Riavvia / Scarica pacchetti e tre schede: **Console** (log in tempo reale), **Sessione** (`server_config.sii`) e **Server e repository** (nome, cartella home, argomenti, repository, eliminazione).
+- **Server**: tutto ciò che riguarda i server, per entrambe le modalità. Client: **Server a cui inviare**. Server: **Nuovo server** e **Tutti i server** (un riquadro per server, da cui si apre la sua pagina, e in fondo l'installazione condivisa con SteamCMD). Installazione e SteamCMD, controllo periodico o webhook, token e regole comuni sono in **Impostazioni → Installazione e opzioni server**. La pagina di un server ha Avvia / Ferma / Riavvia / Scarica pacchetti e tre schede: **Console** (log in tempo reale), **Sessione** (`server_config.sii`) e **Server e repository** (nome, cartella home, argomenti, repository, eliminazione).
 - **Impostazioni**: generale (lingua, avvio con Windows), ruoli del gioco (Client / Server) e cartella documenti del Client. Tutto ciò che riguarda i server è nella pagina **Server**.
 - **Log**: log in tempo reale (le righe iniziano con `[ETS2]` o `[ATS]`), con filtri e il pulsante *Apri file di log*. Il log è sempre in inglese.
 - **Guida**: guida passo passo alla configurazione, in italiano e in inglese, con immagini per il tema chiaro e scuro.
@@ -146,7 +146,7 @@ Impostazioni (per gioco):
 
 ### Aggiornamento del server dedicato (SteamCMD)
 
-Quando SCS aggiorna il gioco serve anche la nuova build del server dedicato. Il PC Server la installa da solo (opzioni in **Server → Installazione e opzioni**; build e pulsanti in fondo a **Server → Tutti i server**):
+Quando SCS aggiorna il gioco serve anche la nuova build del server dedicato. Il PC Server la installa da solo (opzioni in **Impostazioni → Installazione e opzioni server**; build e pulsanti in fondo a **Server → Tutti i server**):
 
 | Campo | Descrizione |
 |---|---|
@@ -164,7 +164,7 @@ Per il `server_logon_token` di Steam l'App ID è `227300` per ETS2 e `270880` pe
 
 ### Pagina Server
 
-Con la modalità Server, nella barra laterale **Server** si apre a tendina: **Tutti i server** (stato, repository e commit di ogni server; in fondo l'installazione condivisa con build, **Controlla**, **Aggiorna installazione** e fase dell'aggiornamento in corso), una voce per ogni server e **Nuovo server**. La pagina di un server ha in alto **Avvia**/**Ferma**, **Riavvia** e **Scarica pacchetti** (anche nel menu del tray) e le schede **Console**, **Sessione** e **Server e repository**.
+Con la modalità Server, nella barra laterale **Server** si apre a tendina: **Nuovo server** e **Tutti i server** (stato, repository e commit di ogni server; in fondo l'installazione condivisa con build, **Controlla**, **Aggiorna installazione** e fase dell'aggiornamento in corso; da qui si apre la pagina di ogni server). La pagina di un server ha in alto **Avvia**/**Ferma**, **Riavvia** e **Scarica pacchetti** (anche nel menu del tray) e le schede **Console**, **Sessione** e **Server e repository**.
 
 La pagina **Console** mostra in tempo reale il log del server dedicato (`server.log.txt`, di default accanto al file `.sii`; modificabile nelle *Opzioni avanzate*). Il log viene riletto da capo a ogni avvio del server. Filtro testo e *Nascondi warning* nascondono le righe che non interessano (es. i `Missing default icon`).
 

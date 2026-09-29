@@ -24,9 +24,10 @@ function randomSecret() {
 
 /**
  * Server role: the installation shared by the servers and its updates, how new packages are found on GitHub, and the
- * rules of every server. options: the server block of the settings of the game.
+ * rules of every server. options: the server block of the settings of the game. embedded: shown inside Settings,
+ * which has the page header.
  */
-export default function ServerOptions({ game: id, options, localIps, suggested, onSaved }) {
+export default function ServerOptions({ game: id, options, localIps, suggested, onSaved, embedded }) {
   const t = useT();
   const game = GAME[id];
   const name = game.name;
@@ -60,9 +61,10 @@ export default function ServerOptions({ game: id, options, localIps, suggested, 
   };
 
   return (
-    <div className="flex min-h-full flex-col">
-      <PageHeader title={t('options.title')} subtitle={t('options.subtitle', { game: game.fullName })} />
+    <div className={`flex flex-col ${embedded ? 'flex-1' : 'min-h-full'}`}>
+      {!embedded && <PageHeader title={t('options.title')} subtitle={t('options.subtitle', { game: game.fullName })} />}
       <div className="flex-1 space-y-4 px-8 pb-6">
+        {embedded && <p className="text-sm text-slate-500 dark:text-slate-400">{t('options.subtitle', { game: game.fullName })}</p>}
         <Card title={t('settings.installTitle', { game: name })} icon={HardDriveDownload} description={t('settings.installDescription')}>
           <div className="space-y-4">
             <Field label={t('settings.installDir')} hint={t('settings.installDirHint2', { exe: game.serverExe })}>

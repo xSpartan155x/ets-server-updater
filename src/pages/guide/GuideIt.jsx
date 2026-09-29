@@ -108,11 +108,11 @@ server_packages.dat binary`}</code></pre>
       <h2 id="5-configurare-il-server">5. Configurare il Server</h2>
       <p>Il Server è il PC dove girano i server dedicati.</p>
       <h3 id="51-ruolo-e-installazione">5.1 Ruolo Server e installazione</h3>
-      <p>In <strong>Impostazioni</strong> attiva il ruolo <strong>Server</strong> e clicca <strong>Salva impostazioni</strong> (in <strong>Generale</strong> attiva anche <strong>Avvia con Windows</strong>, consigliato su un PC sempre acceso). Da qui in poi tutto è nella pagina <strong>Server</strong> della barra laterale. In <strong>Server → Installazione e opzioni</strong>, scheda <strong>Installazione del server dedicato</strong>, c&#39;è la cartella dove l&#39;app installa il server dedicato con SteamCMD (proposta: <code>ETS2 Package Sync\ETS2\installation</code> nella cartella del tuo utente, fuori da Documenti). Se il server dedicato è già installato, indica la sua cartella (quella che contiene <code>bin\win_x64</code>). Nella stessa pagina ci sono le opzioni di SteamCMD (sezione 5.6), il controllo di GitHub (sezione 5.3) e le <strong>Regole comuni dei server</strong> (backup, timeout di arresto, controllo all&#39;avvio).</p>
+      <p>In <strong>Impostazioni</strong> attiva il ruolo <strong>Server</strong> e clicca <strong>Salva impostazioni</strong> (in <strong>Generale</strong> attiva anche <strong>Avvia con Windows</strong>, consigliato su un PC sempre acceso). In <strong>Impostazioni</strong> compare la scheda <strong>Installazione e opzioni server</strong>: nel riquadro <strong>Installazione del server dedicato</strong>, c&#39;è la cartella dove l&#39;app installa il server dedicato con SteamCMD (proposta: <code>ETS2 Package Sync\ETS2\installation</code> nella cartella del tuo utente, fuori da Documenti). Se il server dedicato è già installato, indica la sua cartella (quella che contiene <code>bin\win_x64</code>). Nella stessa scheda ci sono le opzioni di SteamCMD (sezione 5.6), il controllo di GitHub (sezione 5.3) e le <strong>Regole comuni dei server</strong> (backup, timeout di arresto, controllo all&#39;avvio).</p>
       <Shot name="server-install" alt="Installazione del server dedicato" />
       <p>Tutti i server del gioco usano questa installazione: ognuno viene avviato con <code>-nosingle -homedir &quot;&lt;sua cartella home&gt;&quot;</code>, quindi legge configurazione e pacchetti dalla sua cartella e non da Documenti.</p>
       <h3 id="52-creare-un-server">5.2 Creare un server</h3>
-      <p>Clicca <strong>Nuovo server</strong> nella barra laterale (l&#39;ultima voce del gruppo <strong>Server</strong>, o il pulsante in <strong>Server → Tutti i server</strong>) e compila:</p>
+      <p>Clicca <strong>Nuovo server</strong> nella barra laterale (la prima voce del gruppo <strong>Server</strong>, o il pulsante in <strong>Server → Tutti i server</strong>) e compila:</p>
       <table>
       <thead>
       <tr>
@@ -149,7 +149,7 @@ server_packages.dat binary`}</code></pre>
       <p>L&#39;app crea la cartella home con un <code>server_config.sii</code> completo e <strong>porte libere</strong> su questo PC (diverse da quelle degli altri server, anche dell&#39;altro gioco). Le porte proposte si vedono e si cambiano in <em>Opzioni avanzate</em>. Se il server dedicato non è ancora installato, con <strong>Installalo adesso</strong> parte il download con SteamCMD.</p>
       <p>Il nuovo server compare nella barra laterale sotto <strong>Server</strong>, con il suo pallino di stato: cliccalo per aprire la sua pagina (sezione 10).</p>
       <h3 id="53-nuovi-pacchetti">5.3 Controllo periodico o webhook</h3>
-      <p>In <strong>Server → Installazione e opzioni</strong>, scheda <strong>Nuovi pacchetti da GitHub</strong>, scegli come il Server scopre che il Client ha inviato nuovi pacchetti alla repository di uno dei suoi server:</p>
+      <p>In <strong>Impostazioni → Installazione e opzioni server</strong>, riquadro <strong>Nuovi pacchetti da GitHub</strong>, scegli come il Server scopre che il Client ha inviato nuovi pacchetti alla repository di uno dei suoi server:</p>
       <table>
       <thead>
       <tr>
@@ -214,7 +214,7 @@ server_packages.dat binary`}</code></pre>
       <p>Nella pagina <strong>Log</strong> le righe iniziano con <code>[ETS2]</code> o <code>[ATS]</code>, seguite dal nome del server.</p>
       <h3 id="56-aggiornamenti-del-server-steamcmd">5.6 Aggiornamenti del server dedicato (SteamCMD)</h3>
       <p>Quando SCS pubblica un aggiornamento del gioco, anche il server dedicato va aggiornato. L&#39;app lo fa con <strong>SteamCMD</strong>, senza client Steam e senza account: la prima volta scarica SteamCMD (circa 150 MB), poi ogni 2 ore (<strong>Controlla Steam ogni</strong>) confronta la build installata con l&#39;ultima su Steam. Con <strong>Aggiorna automaticamente</strong> attivo ferma i server accesi, aggiorna l&#39;installazione e li riavvia; se è disattivato ricevi solo una notifica.</p>
-      <p>In fondo alla pagina <strong>Server → Tutti i server</strong> ci sono build installata e ultima su Steam, i pulsanti <strong>Controlla</strong> e <strong>Aggiorna installazione</strong> (o <strong>Installa ora</strong> se il server non è ancora installato) e la fase in corso durante l&#39;aggiornamento. Le opzioni (<strong>Aggiorna automaticamente</strong>, <strong>Controlla Steam ogni</strong>) sono in <strong>Server → Installazione e opzioni</strong>.</p>
+      <p>In fondo alla pagina <strong>Server → Tutti i server</strong> ci sono build installata e ultima su Steam, i pulsanti <strong>Controlla</strong> e <strong>Aggiorna installazione</strong> (o <strong>Installa ora</strong> se il server non è ancora installato) e la fase in corso durante l&#39;aggiornamento. Le opzioni (<strong>Aggiorna automaticamente</strong>, <strong>Controlla Steam ogni</strong>) sono in <strong>Impostazioni → Installazione e opzioni server</strong>.</p>
       <blockquote>
       <p>Se il server dedicato è stato installato con il client Steam o copiato a mano, la build installata può risultare <em>Sconosciuta</em>: clicca una volta <strong>Aggiorna</strong> e da lì in poi gli aggiornamenti sono automatici.</p>
       </blockquote>
@@ -346,7 +346,7 @@ server_packages.dat binary`}</code></pre>
       </tbody></table>
       <Shot name="github-token" alt="Nuovo fine-grained token" />
       </li>
-      <li><p><strong>Generate token</strong>, copia il valore (<code>github_pat_...</code>, viene mostrato una sola volta) e incollalo nell&#39;app in <strong>Server → Installazione e opzioni → Token GitHub</strong>, poi <strong>Salva</strong>.</p>
+      <li><p><strong>Generate token</strong>, copia il valore (<code>github_pat_...</code>, viene mostrato una sola volta) e incollalo nell&#39;app in <strong>Impostazioni → Installazione e opzioni server → Token GitHub</strong>, poi <strong>Salva</strong>.</p>
       </li>
       </ol>
       <blockquote>
@@ -366,10 +366,8 @@ server_packages.dat binary`}</code></pre>
       <h2 id="10-pagina-server">10. Le pagine Server</h2>
       <p>Tutto ciò che riguarda i server è nel gruppo <strong>Server</strong> della barra laterale, che si apre a tendina. Con tutti e due i ruoli attivi è diviso in <strong>Ospitati su questo PC</strong> e <strong>Invio dal Client</strong>:</p>
       <ul>
-      <li><strong>Tutti i server</strong>: una scheda per server con stato, cartella home, repository, commit installato e i pulsanti <strong>Avvia/Ferma</strong>, <strong>Riavvia</strong>, <strong>Scarica pacchetti</strong> (<strong>Avvia tutti</strong> e <strong>Ferma tutti</strong> in alto); in fondo l&#39;installazione condivisa e i suoi aggiornamenti (sezione 5.6). Un pallino arancione sulla voce indica una build nuova, un aggiornamento in corso o il server dedicato non ancora installato.</li>
-      <li><strong>un elemento per ogni server</strong>, con il pallino del suo stato: apre la pagina di quel server.</li>
       <li><strong>Nuovo server</strong>: apre la creazione guidata di un server (sezione 5.2).</li>
-      <li><strong>Installazione e opzioni</strong>: cartella dell&#39;installazione e aggiornamenti con SteamCMD, controllo periodico o webhook di GitHub, token e regole comuni a tutti i server.</li>
+      <li><strong>Tutti i server</strong>: una scheda per server con stato, cartella home, repository, commit installato e i pulsanti <strong>Avvia/Ferma</strong>, <strong>Riavvia</strong>, <strong>Scarica pacchetti</strong> (<strong>Avvia tutti</strong> e <strong>Ferma tutti</strong> in alto); in fondo l&#39;installazione condivisa e i suoi aggiornamenti (sezione 5.6); da qui si apre la pagina di ogni server. Un pallino arancione sulla voce indica una build nuova, un aggiornamento in corso o il server dedicato non ancora installato.</li>
       <li><strong>Server a cui inviare</strong> (ruolo Client): i server a cui il Client invia i pacchetti esportati (sezione 4.3).</li>
       </ul>
       <Shot name="servers-list" alt="Tutti i server" />

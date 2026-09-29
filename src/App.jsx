@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   BookOpen, ChevronDown, CloudUpload, LayoutDashboard, List, Loader2, Monitor, Moon, Plus, ScrollText, ServerCog,
-  Settings as SettingsIcon, SlidersHorizontal, Sun,
+  Settings as SettingsIcon, Sun,
 } from 'lucide-react';
-import { SearchInput, StatusDot, STATE_STYLES, matches } from './components/ui';
+import { StatusDot, STATE_STYLES } from './components/ui';
 import GameSwitcher from './components/GameSwitcher';
 import GitDialog from './components/GitDialog';
 import DestinationChooser from './components/DestinationChooser';
@@ -13,7 +13,6 @@ import Logs from './pages/Logs';
 import Server from './pages/Server';
 import NewServer from './pages/server/NewServer';
 import SendTo from './pages/server/SendTo';
-import ServerOptions from './pages/server/ServerOptions';
 import Guide from './pages/Guide';
 import UpdateCard, { UpdateBanner } from './components/UpdateCard';
 import { GAME, activeIds } from './games';
@@ -38,20 +37,19 @@ const NAV_ACTIVE = 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text
 const NAV_IDLE = 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100';
 
 const MAX_LOGS = 500;
-const NAV_SEARCH_FROM = 7; // servers in the sidebar from which a search box helps
 const MAX_CONSOLE = 2000;
 
 /**
  * Pages of the Server group, where everything about servers is:
  * - server role: 'server-list' (all the servers and the shared installation), 'srv:<id>:<tab>' (one server, tab
- *   'console' | 'config' | 'settings') and 'server-options' (installation, updates, sync and rules of all the servers);
+ *   'console' | 'config' | 'settings');
  * - client role: 'server-send' (the servers the exports are sent to).
- * 'server' opens the first page of the roles in use.
+ * 'server' opens the first page of the roles in use. The options shared by the servers of the server role
+ * ('server-options': installation, updates, sync and rules) are a tab of Settings.
  */
 export function serverRoute(page) {
   if (page === 'server') return { kind: 'home' };
   if (page === 'server-list' || page === 'server-updates') return { kind: 'list' };
-  if (page === 'server-options') return { kind: 'options' };
   if (page === 'server-send') return { kind: 'send' };
   const match = /^srv:([^:]+):(\w+)$/.exec(page);
   return match ? { kind: 'server', id: match[1], tab: match[2] } : null;
@@ -130,9 +128,8 @@ function NavLabel({ children }) {
 }
 
 /**
- * Sidebar group with everything about servers. Server role: all the servers (and the installation), one item per
- * server with its status, the wizard of a new server and the options shared by all of them. Client role: the servers
- * the exports are sent to.
+ * Sidebar group with everything about servers. Server role: the wizard of a new server and all the servers (and the
+ * installation); each server is opened from that list. Client role: the servers the exports are sent to.
  */
 function ServerNav({ g, route, setPage, onNew }) {
   const t = useT();
@@ -145,9 +142,6 @@ function ServerNav({ g, route, setPage, onNew }) {
   const both = Boolean(g.client && host);
   const steam = host?.details.steam;
   const updateNews = host && ((steam.installed && steam.latest && steam.installed !== steam.latest) || steam.phase || !host.details.exeExists);
-  const [query, setQuery] = useState('');
-  const servers = host ? host.details.servers : [];
-  const shown = servers.filter((server) => (route?.kind === 'server' && route.id === server.id) || matches(query, server.name));
   const item = (active) => `${NAV_ITEM} py-1.5 ${active ? NAV_ACTIVE : NAV_IDLE}`;
   return (
     <div>
@@ -173,31 +167,15 @@ function ServerNav({ g, route, setPage, onNew }) {
           {host && (
             <>
               {both && <NavLabel>{t('nav.group.hosted')}</NavLabel>}
-              <button type="button" onClick={() => setPage('server-list')} className={item(route?.kind === 'list')}>
-                <List className="size-3.5" />
-                <span className="flex-1 text-left">{t('nav.server-list')}</span>
-                {updateNews && <span className="size-1.5 rounded-full bg-orange-500" title={t('nav.installNews')} />}
-              </button>
-              {servers.length >= NAV_SEARCH_FROM && <SearchInput value={query} onChange={setQuery} className="py-0.5" />}
-              {shown.map((server) => (
-                <button
-                  key={server.id}
-                  type="button"
-                  onClick={() => setPage(`srv:${server.id}:${route?.kind === 'server' ? route.tab : 'console'}`)}
-                  className={item(route?.kind === 'server' && route.id === server.id)}
-                  title={server.status}
-                >
-                  <StatusDot state={server.state} className="mx-0.5 shrink-0 scale-90" />
-                  <span className="min-w-0 flex-1 truncate text-left">{server.name}</span>
-                </button>
-              ))}
               <button type="button" onClick={onNew} className={`${NAV_ITEM} py-1.5 text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-500/10`}>
                 <Plus className="size-3.5" />
                 <span className="flex-1 text-left">{t('nav.server-new')}</span>
               </button>
-              <button type="button" onClick={() => setPage('server-options')} className={item(route?.kind === 'options')}>
-                <SlidersHorizontal className="size-3.5" />
-                <span className="flex-1 text-left">{t('nav.server-options')}</span>
+              {/* a server's own page belongs to the list it is opened from */}
+              <button type="button" onClick={() => setPage('server-list')} className={item(route?.kind === 'list' || route?.kind === 'server')}>
+                <List className="size-3.5" />
+                <span className="flex-1 text-left">{t('nav.server-list')}</span>
+                {updateNews && <span className="size-1.5 rounded-full bg-orange-500" title={t('nav.installNews')} />}
               </button>
             </>
           )}
@@ -352,7 +330,9 @@ function Layout({
   const host = g?.server || null;
   // the Server pages exist only for the roles in use, and a removed server falls back to the list
   const route = resolveRoute(page, g);
-  const current = route ? 'server' : page.startsWith('srv:') || page.startsWith('server') ? 'dashboard' : page;
+  // the options of the server role are a tab of Settings, while that role is in use
+  const serverOptions = page === 'server-options' && Boolean(host);
+  const current = route ? 'server' : serverOptions ? 'settings' : page.startsWith('srv:') || page.startsWith('server') ? 'dashboard' : page;
   const [creating, setCreating] = useState(false); // wizard of a new server, from the sidebar or the list of servers
   const mainRef = useRef(null);
   useEffect(() => {
@@ -394,6 +374,7 @@ function Layout({
             onLanguage={onLanguage}
             onClientChosen={() => !git.found && onGitHelp()}
             onNavigate={setPage}
+            tab={serverOptions ? 'server' : 'general'}
           />
         )}
         {current === 'logs' && <Logs logs={logs} />}
@@ -404,16 +385,6 @@ function Layout({
             game={game}
             options={data.settings.games[game].client}
             local={host ? data.settings.games[game].server.servers : []}
-            onSaved={onSaved}
-          />
-        )}
-        {route?.kind === 'options' && (
-          <ServerOptions
-            key={game}
-            game={game}
-            options={data.settings.games[game].server}
-            localIps={data.localIps}
-            suggested={data.suggested[game]}
             onSaved={onSaved}
           />
         )}

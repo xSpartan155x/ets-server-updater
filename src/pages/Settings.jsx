@@ -6,6 +6,7 @@ import {
   Advanced, Button, Card, Field, NumberInput, OptionCard, PageHeader, PathInput, TextInput, Toggle,
 } from '../components/ui';
 import { GameIcon } from '../components/GameSwitcher';
+import ServerOptions from './server/ServerOptions';
 import { GAME } from '../games';
 import { Trans, useT } from '../i18n';
 
@@ -118,9 +119,20 @@ function GameSettings({ game, values, saved, setClient, setServer, onClientChose
   );
 }
 
-/** game: the game chosen in the sidebar; the form keeps the changes of both games until Save settings. */
-export default function Settings({ data, onSaved, game, language, onLanguage, onClientChosen, onNavigate }) {
+const TABS = [
+  { id: 'general', page: 'settings', icon: Settings2 },
+  { id: 'server', page: 'server-options', icon: ServerCog },
+];
+
+/**
+ * game: the game chosen in the sidebar; the form keeps the changes of both games until Save settings.
+ * tab: 'general' or 'server' (the options shared by the servers of the game, saved on their own; only while its
+ * server role is in use).
+ */
+export default function Settings({ data, onSaved, game, language, onLanguage, onClientChosen, onNavigate, tab = 'general' }) {
   const t = useT();
+  const hosting = data.settings.games[game].server.enabled;
+  const current = hosting ? tab : 'general';
   const [form, setForm] = useState(data.settings);
   const [autostart, setAutostart] = useState(data.autostart);
   const [imported, setImported] = useState([]); // games whose values (servers too) come from an imported file
@@ -220,6 +232,40 @@ export default function Settings({ data, onSaved, game, language, onLanguage, on
         </div>
       )}
 
+      {hosting && (
+        <div className="mb-4 flex gap-1 border-b border-slate-200 px-8 dark:border-slate-800" role="tablist">
+          {TABS.map(({ id, page, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={current === id}
+              onClick={() => onNavigate(page)}
+              className={`-mb-px flex cursor-pointer items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                current === id
+                  ? 'border-orange-500 text-orange-700 dark:text-orange-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
+              }`}
+            >
+              <Icon className="size-4" />
+              {t(`settings.tab.${id}`)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {current === 'server' ? (
+        <ServerOptions
+          key={game}
+          embedded
+          game={game}
+          options={data.settings.games[game].server}
+          localIps={data.localIps}
+          suggested={data.suggested[game]}
+          onSaved={onSaved}
+        />
+      ) : (
+      <>
       <div className="flex-1 space-y-4 px-8 pb-6">
         <Card title={t('settings.generalTitle')} icon={Settings2}>
           <div className="space-y-4">
@@ -273,6 +319,8 @@ export default function Settings({ data, onSaved, game, language, onLanguage, on
           <Button variant="primary" icon={Save} loading={saving} onClick={save}>{t('settings.save')}</Button>
         </div>
       </footer>
+      </>
+      )}
     </div>
   );
 }
