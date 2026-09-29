@@ -55,14 +55,15 @@ class SteamCmd {
     return result;
   }
 
-  /** Download and set up SteamCMD if missing. onStatus('download' | 'setup'). */
-  async ensure(onStatus = () => {}) {
+  /** Download and set up SteamCMD if missing. onStatus('download' | 'setup'); signal: stops it (see exec). */
+  async ensure(onStatus = () => {}, signal = undefined) {
     if (fs.existsSync(this.exe)) return;
     onStatus('download');
     fs.mkdirSync(this.dir, { recursive: true });
     const zip = path.join(this.dir, 'steamcmd.zip');
     try {
-      const response = await fetch(ZIP_URL, { signal: AbortSignal.timeout(120_000) });
+      const timeout = AbortSignal.timeout(120_000);
+      const response = await fetch(ZIP_URL, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       fs.writeFileSync(zip, Buffer.from(await response.arrayBuffer()));
       const script = `Expand-Archive -LiteralPath '${zip.replace(/'/g, "''")}' -DestinationPath '${this.dir.replace(/'/g, "''")}' -Force`;
@@ -75,12 +76,19 @@ class SteamCmd {
     }
     if (!fs.existsSync(this.exe)) throw new LocalizedError('err.steamcmdDownload', { message: 'steamcmd.exe missing' });
     onStatus('setup');
-    await this.exec(['+quit'], () => {}, UPDATE_TIMEOUT); // first run: SteamCMD updates itself (exit code 7)
+    await this.exec(['+quit'], () => {}, UPDATE_TIMEOUT, signal); // first run: SteamCMD updates itself (exit code 7)
   }
 
-  /** Run SteamCMD with the given commands; onLine gets every output line. Resolves { code, output }. */
-  exec(commands, onLine, timeout) {
+  /**
+   * Run SteamCMD with the given commands; onLine gets every output line. Resolves { code, output }. signal: an
+   * AbortSignal that ends SteamCMD (and what it started) and rejects with err.steamcmdCancelled.
+   */
+  exec(commands, onLine, timeout, signal = undefined) {
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new LocalizedError('err.steamcmdCancelled'));
+        return;
+      }
       const child = spawn(this.exe, ['+@ShutdownOnFailedCommand', '1', '+@NoPromptForPassword', '1', ...commands], {
         cwd: this.dir,
         windowsHide: true,
@@ -99,12 +107,21 @@ class SteamCmd {
       child.stdout.on('data', feed);
       child.stderr.on('data', feed);
       const timer = setTimeout(() => child.kill(), timeout);
+      // the whole tree: after updating itself SteamCMD may go on in a new process
+      const cancel = () => run('taskkill.exe', ['/pid', String(child.pid), '/T', '/F'], { timeout: 15_000 }).catch(() => child.kill());
+      signal?.addEventListener('abort', cancel, { once: true });
       child.on('error', (err) => {
         clearTimeout(timer);
+        signal?.removeEventListener('abort', cancel);
         reject(new LocalizedError('err.steamcmdRun', { message: err.message }));
       });
       child.on('close', (code) => {
         clearTimeout(timer);
+        signal?.removeEventListener('abort', cancel);
+        if (signal?.aborted) {
+          reject(new LocalizedError('err.steamcmdCancelled'));
+          return;
+        }
         if (partial.trim()) {
           output += partial;
           onLine(partial.trim());
@@ -114,12 +131,12 @@ class SteamCmd {
     });
   }
 
-  /** Build id of the public branch of an app on Steam. */
-  latestBuild(appId, onStatus) {
+  /** Build id of the public branch of an app on Steam. signal: stops the check (nothing is installed by it). */
+  latestBuild(appId, onStatus, signal) {
     return this.exclusive(async () => {
-      await this.ensure(onStatus);
+      await this.ensure(onStatus, signal);
       const { output } = await this.exec(
-        ['+login', 'anonymous', '+app_info_update', '1', '+app_info_print', String(appId), '+quit'], () => {}, INFO_TIMEOUT);
+        ['+login', 'anonymous', '+app_info_update', '1', '+app_info_print', String(appId), '+quit'], () => {}, INFO_TIMEOUT, signal);
       const build = parseLatestBuild(output);
       if (!build) throw new LocalizedError('err.steamcmdInfo', { detail: lastError(output) || 'no build id' });
       return build;

@@ -55,6 +55,7 @@ class ServerHost extends Engine {
     this.server = null;
     this.timers = [];
     this.pollFailed = new Map(); // repository key -> true while its check fails
+    this.checkAbort = null; // AbortController of the running check of the Steam build
   }
 
   get list() {
@@ -79,6 +80,7 @@ class ServerHost extends Engine {
   stop() {
     this.stopped = true;
     this.jobs = [];
+    this.checkAbort?.abort(); // a check of Steam only reads: it is dropped, not waited for
     for (const timer of [...this.timers, ...(this.steamTimers || [])]) clearTimeout(timer); // clearTimeout also clears intervals
     this.timers = [];
     this.steamTimers = [];
@@ -276,7 +278,13 @@ class ServerHost extends Engine {
   async checkServerBuild(manual) {
     if (!this.steamcmd) return;
     this.setStatus('status.steamChecking', 'busy');
-    const latest = await this.steamcmd.latestBuild(this.game.serverAppId, (phase) => this.steamPhase(phase));
+    this.checkAbort = new AbortController();
+    let latest;
+    try {
+      latest = await this.steamcmd.latestBuild(this.game.serverAppId, (phase) => this.steamPhase(phase), this.checkAbort.signal);
+    } finally {
+      this.checkAbort = null;
+    }
     this.steamState.latest = latest;
     this.steamState.checked = new Date().toLocaleString();
     this.saveSteamState();
@@ -306,6 +314,7 @@ class ServerHost extends Engine {
   async updateServerFiles() {
     if (!this.steamcmd) return;
     if (!this.installDir) throw new LocalizedError('err.installDirNotSet');
+    this.busy = true; // also after a check that found a new build (auto update)
     await this.scan();
     const wasRunning = this.list.filter((i) => i.running);
     if (wasRunning.length) {
@@ -556,7 +565,8 @@ class ServerHost extends Engine {
       const job = this.jobs.shift();
       const instance = job.server ? this.instances.get(job.server) : null;
       if (job.server && !instance) continue; // removed meanwhile
-      this.busy = true;
+      // busy blocks saving the settings and quitting: not for a check of Steam, which only reads and is stopped then
+      this.busy = job.kind !== 'steam-check';
       try {
         if (instance) {
           await this.runServerJob(job, instance);
@@ -570,7 +580,9 @@ class ServerHost extends Engine {
         }
         this.idle();
       } catch (err) {
-        if (job.kind === 'steam-check' && !job.manual) {
+        if (this.stopped) {
+          this.log.info(`${job.kind} stopped: ${errorText(err)}`);
+        } else if (job.kind === 'steam-check' && !job.manual) {
           // a failed background check (e.g. no internet) must not bother the user: retried at the next check
           this.log.warn(`Check of the server build failed: ${err.message}`);
           this.idle();
