@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  ::selection {
+    background: var(--color-orange-500);
+    color: white;
+  }
+}
+
+/* Release notes arrive from GitHub as markdown */
+@layer components {
+  .prose-md {
+    @apply space-y-3 text-sm leading-relaxed;
+  }
+  .prose-md h1 {
+    @apply text-xl font-bold text-slate-900 dark:text-white;
+  }
+  .prose-md h2,
+  .prose-md h3 {
+    @apply pt-2 text-base font-semibold text-slate-900 dark:text-white;
+  }
+  .prose-md ul {
+    @apply list-disc space-y-1 pl-5;
+  }
+  .prose-md ol {
+    @apply list-decimal space-y-1 pl-5;
+  }
+  .prose-md strong {
+    @apply font-semibold text-slate-900 dark:text-white;
+  }
+  .prose-md a {
+    @apply text-orange-600 underline dark:text-orange-400;
+  }
+  .prose-md code {
+    @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.85em] dark:bg-slate-800;
+  }
+  .prose-md hr {
+    @apply border-slate-200 dark:border-slate-800;
+  }
+  .prose-md table {
+    @apply block w-full overflow-x-auto border-collapse text-left;
+  }
+  .prose-md th,
+  .prose-md td {
+    @apply border border-slate-200 px-3 py-1.5 dark:border-slate-800;
+  }
+  .prose-md th {
+    @apply bg-slate-50 font-semibold dark:bg-slate-900;
+  }
+}
