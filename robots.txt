@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://xspartan155x.github.io/ets-server-updater/sitemap.xml
